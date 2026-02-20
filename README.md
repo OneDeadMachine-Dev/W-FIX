@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Release](https://img.shields.io/badge/version-2.0.0-green)](https://github.com/OneDeadMachine/W-Fix/releases)
+[![Release](https://img.shields.io/badge/version-2.2.0-green)](https://github.com/OneDeadMachine/W-Fix/releases)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 [![Author](https://img.shields.io/badge/author-OneDeadMachine-red)](https://github.com/OneDeadMachine)
 
