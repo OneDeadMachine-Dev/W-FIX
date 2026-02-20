@@ -152,19 +152,23 @@ public class WmiService
         return [];
     }
 
-    /// <summary>PowerShell Get-CimInstance — работает без модулей, самый портативный.</summary>
+    /// <summary>
+    /// Get-CimInstance через внешний powershell.exe (Windows PS 5.1 Desktop edition).
+    /// CimCmdlets несовместим с Core-режимом встроенного PS SDK — только внешний процесс!
+    /// </summary>
     private static IReadOnlyList<PrinterInfo> GetLocalPrintersCim()
     {
         var result = new List<PrinterInfo>();
 
-        using var engine = new PowerShellEngine();
-        var task = engine.RunAsync(@"
+        // ВАЖНО: используем RunExternalAsync (system powershell.exe),
+        // т.к. Get-CimInstance требует CimCmdlets, недоступный в Core-режиме SDK.
+        var task = PowerShellEngine.RunExternalAsync(@"
             Get-CimInstance -ClassName Win32_Printer | ForEach-Object {
                 $p = $_
-                ""{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}"" -f `
+                ('{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}' -f `
                     $p.Name, $p.DriverName, $p.PortName, $p.Shared, `
                     $p.ShareName, [int]$p.PrinterStatus, $p.Jobs, `
-                    $p.Comment, $p.Location, $p.Default
+                    $p.Comment, $p.Location, $p.Default)
             }
         ");
         task.Wait();
