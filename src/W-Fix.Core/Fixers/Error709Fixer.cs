@@ -133,8 +133,10 @@ public class Error709Fixer : FixerBase
             }
         ";
 
-        using var engine = new PowerShellEngine(remoteMachine);
-        var (success, output, error) = await engine.RunAsync(script, ct: ct);
+        // Get-CimInstance требует CimCmdlets (Desktop-only) — используем внешний powershell.exe
+        var (success, output, error) = remoteMachine == null
+            ? await PowerShellEngine.RunExternalAsync(script, ct)
+            : await new PowerShellEngine(remoteMachine).RunAsync(script, ct: ct);
         ReportOutput(output, Report);
 
         return success

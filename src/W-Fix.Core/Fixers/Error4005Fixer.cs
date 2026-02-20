@@ -52,8 +52,11 @@ public class Error4005Fixer : FixerBase
             }
             """;
 
-        using var engine = new PowerShellEngine(remoteMachine);
-        var (_, out1, _) = await engine.RunAsync(step1, ct: ct);
+        using var engine = remoteMachine != null ? new PowerShellEngine(remoteMachine) : null;
+        async Task<(bool, IReadOnlyList<string>, string?)> RunPS(string script) =>
+            engine != null ? await engine.RunAsync(script, ct: ct) : await PowerShellEngine.RunExternalAsync(script, ct);
+
+        var (_, out1, _) = await RunPS(step1);
         ReportOutput(out1, Report);
 
         // ── Шаг 2: Реестр — RestrictDriverInstallationToAdministrators ──────────
@@ -80,7 +83,7 @@ public class Error4005Fixer : FixerBase
             }
             """;
 
-        var (_, out2, _) = await engine.RunAsync(step2, ct: ct);
+        var (_, out2, _) = await RunPS(step2);
         ReportOutput(out2, Report);
 
         // ── Шаг 3: Брандмауэр — File and Printer Sharing ───────────────────────
@@ -109,7 +112,7 @@ public class Error4005Fixer : FixerBase
             }
             """;
 
-        var (_, out3, _) = await engine.RunAsync(step3, ct: ct);
+        var (_, out3, _) = await RunPS(step3);
         ReportOutput(out3, Report);
 
         // ── Шаг 4: SMB клиент – обеспечить доступ ──────────────────────────────
@@ -138,7 +141,7 @@ public class Error4005Fixer : FixerBase
             }
             """;
 
-        var (_, out4, _) = await engine.RunAsync(step4, ct: ct);
+        var (_, out4, _) = await RunPS(step4);
         ReportOutput(out4, Report);
 
         // ── Шаг 5: Перезапуск Spooler ───────────────────────────────────────────
@@ -176,7 +179,7 @@ public class Error4005Fixer : FixerBase
                     }
                 ";
 
-                var (_, out6, _) = await engine.RunAsync(checkScript, ct: ct);
+                var (_, out6, _) = await RunPS(checkScript);
                 ReportOutput(out6, Report);
             }
         }

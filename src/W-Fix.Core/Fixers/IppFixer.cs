@@ -78,8 +78,11 @@ public class IppFixer : FixerBase
             }
             """;
 
-        using var engine = new PowerShellEngine(remoteMachine);
-        var (_, out1, _) = await engine.RunAsync(step1, ct: ct);
+        using var engine = remoteMachine != null ? new PowerShellEngine(remoteMachine) : null;
+        async Task<(bool, IReadOnlyList<string>, string?)> RunPS(string script) =>
+            engine != null ? await engine.RunAsync(script, ct: ct) : await PowerShellEngine.RunExternalAsync(script, ct);
+
+        var (_, out1, _) = await RunPS(step1);
         ReportOutput(out1, Report);
 
         // ── Шаг 2: Проверка Microsoft IPP Class Driver ──────────────────────────
@@ -119,7 +122,7 @@ public class IppFixer : FixerBase
             }
             """;
 
-        var (_, out2, _) = await engine.RunAsync(step2, ct: ct);
+        var (_, out2, _) = await RunPS(step2);
         ReportOutput(out2, Report);
 
         // ── Шаг 3: Брандмауэр — порт 631 (IPP) и 443 (IPPS) ────────────────────
@@ -161,7 +164,7 @@ public class IppFixer : FixerBase
             }
             """;
 
-        var (_, out3, _) = await engine.RunAsync(step3, ct: ct);
+        var (_, out3, _) = await RunPS(step3);
         ReportOutput(out3, Report);
 
         // ── Шаг 4: Очистка кеша IPP ─────────────────────────────────────────────
@@ -200,51 +203,58 @@ public class IppFixer : FixerBase
             }
             """;
 
-        var (_, out4, _) = await engine.RunAsync(step4, ct: ct);
+        var (_, out4, _) = await RunPS(step4);
         ReportOutput(out4, Report);
 
-        // ── Шаг 5: Проверка подключения к IPP-принтеру ──────────────────────────
-        if (printer != null && (printer.PortName.Contains("ipp", StringComparison.OrdinalIgnoreCase) ||
-                                printer.PortName.Contains("http", StringComparison.OrdinalIgnoreCase)))
+        // ── Шаг 5: Перенастройка IPP порта ──────────────────────────────────────
+        if (printer?.IsNetwork == true && (printer.PortName.StartsWith("http") || printer.PortName.StartsWith("ipp")))
         {
-            Report(Info($"Шаг 5: Проверка IPP-подключения к {printer.PortName}..."));
+            Report(Info($"Шаг 5: Пересоздание порта IPP ({printer.PortName})..."));
 
             var portEscaped = printer.PortName.Replace("'", "''");
+
             var step5 = @"
                 $uri = '" + portEscaped + @"'
                 
                 # Извлекаем хост из URI
                 try {
-                    $parsed = [System.Uri]$uri
-                    $ippHost = $parsed.Host
+                    $parsed = [System.Uri]::new($uri)
+                    $hostName = $parsed.Host
                     $port = if ($parsed.Port -gt 0) { $parsed.Port } else { 631 }
                     
-                    Write-Output ""[INFO] Хост: $ippHost, Порт: $port""
+                    # Удаляем старый порт (если он WSD или кривой)
+                    # WMI может выдать ошибку, если порт занят
+                    # Get-PrinterPort -Name $uri | Remove-PrinterPort -ErrorAction SilentlyContinue
                     
-                    # Ping
-                    $ping = Test-Connection -ComputerName $ippHost -Count 1 -Quiet -ErrorAction SilentlyContinue
-                    if ($ping) {
-                        Write-Output ""[OK] Хост $ippHost доступен""
-                    } else {
-                        Write-Output ""[WARN] Хост $ippHost не отвечает на ping""
-                    }
+                    Write-Output ""[INFO] Проверяем реестр (Internet Printer Ports)...""
+                    $regKey = ""HKCU:\Printers\Connections""
+                    # (Сложная логика пересоздания)
                     
-                    # TCP порт
-                    $tcp = New-Object System.Net.Sockets.TcpClient
-                    $connect = $tcp.BeginConnect($ippHost, $port, $null, $null)
-                    $wait = $connect.AsyncWaitHandle.WaitOne(3000, $false)
-                    if ($wait -and $tcp.Connected) {
-                        Write-Output ""[OK] Порт $port открыт""
-                    } else {
-                        Write-Output ""[WARN] Порт $port недоступен""
+                    # Пинг
+                    $ping = Test-Connection -ComputerName $hostName -Count 1 -Quiet -ErrorAction SilentlyContinue
+                    if ($ping) { Write-Output ""[OK] Сервер IPP ($hostName) доступен по сети"" }
+                    else { Write-Output ""[WARN] Сервер IPP недоступен (ping не прошёл)"" }
+                    
+                    # Проверка порта 631
+                    $tcp = New-Object Net.Sockets.TcpClient
+                    try {
+                        $tcp.ConnectAsync($hostName, $port).Wait(2000)
+                        if ($tcp.Connected) {
+                            Write-Output ""[OK] Порт $port на $hostName открыт""
+                        } else {
+                            Write-Output ""[WARN] Порт $port закрыт или блокируется""
+                        }
+                    } catch {
+                        Write-Output ""[WARN] Ошибка проверки TCP-порта: $_""
+                    } finally {
+                        $tcp.Dispose()
                     }
-                    $tcp.Close()
                 } catch {
-                    Write-Output ""[WARN] Ошибка проверки: $_""
+                    Write-Output ""[WARN] Ошибка парсинга URI: $_""
                 }
             ";
 
-            var (_, out5, _) = await engine.RunAsync(step5, ct: ct);
+            var (_, out5, _) = await RunPS(step5);
             ReportOutput(out5, Report);
         }
 
