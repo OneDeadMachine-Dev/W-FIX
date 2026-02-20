@@ -151,8 +151,11 @@ public class PowerShellEngine : IDisposable
                     psExe = "powershell.exe";
                 }
 
+                // Заставляем PS-скрипт отдавать вывод в UTF-8, чтобы мы могли правильно его прочитать с кириллицей
+                var utf8Script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n" + script;
+
                 // Кодируем скрипт в Base64 для безопасной передачи
-                var bytes = System.Text.Encoding.Unicode.GetBytes(script);
+                var bytes = System.Text.Encoding.Unicode.GetBytes(utf8Script);
                 var encoded = Convert.ToBase64String(bytes);
 
                 var psi = new System.Diagnostics.ProcessStartInfo

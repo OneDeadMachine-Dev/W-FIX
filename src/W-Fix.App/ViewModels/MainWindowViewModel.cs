@@ -96,6 +96,23 @@ public partial class MainWindowViewModel : ObservableObject
         IsLoading = false;
     }
 
+    [RelayCommand]
+    public void OpenLogsFolder()
+    {
+        var logDir = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "W-Fix", "Logs");
+            
+        if (System.IO.Directory.Exists(logDir))
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = logDir,
+                UseShellExecute = true
+            });
+        }
+    }
+
     partial void OnSelectedPrinterChanged(PrinterInfo? value)
     {
         PrintJobs.Clear();
