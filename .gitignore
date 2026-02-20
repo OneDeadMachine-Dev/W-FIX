@@ -1,0 +1,54 @@
+# ── Build output ──────────────────────────────────────────────────────────────
+bin/
+obj/
+out/
+publish/
+
+# ── .NET / NuGet ──────────────────────────────────────────────────────────────
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+project.lock.json
+project.fragment.lock.json
+artifacts/
+packages/
+*.nupkg
+*.snupkg
+
+# ── Visual Studio ─────────────────────────────────────────────────────────────
+.vs/
+*.rsuser
+*.vspx
+*.vcxproj.filters.bak
+_UpgradeReport_Files/
+Backup*/
+UpgradeLog*.xml
+UpgradeLog*.htm
+
+# ── Rider / JetBrains ─────────────────────────────────────────────────────────
+.idea/
+*.DotSettings.user
+
+# ── VS Code ───────────────────────────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Generated icon helper (не нужен в репо — ico уже закоммичено) ──────────────
+GenerateIcon.ps1
+
+# ── Secrets / sensitive ───────────────────────────────────────────────────────
+*.pfx
+*.p12
+appsettings.Local.json
+secrets.json

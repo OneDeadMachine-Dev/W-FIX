@@ -1,0 +1,99 @@
+<Window x:Class="WFix.App.Views.DriverInstallDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Переустановка драйвера"
+        Width="520" Height="380"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#0D1117"
+        Foreground="#E6EDF3"
+        FontFamily="Segoe UI"
+        ShowInTaskbar="False">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="🔧 Выберите способ установки драйвера"
+                   FontSize="16" FontWeight="SemiBold" Foreground="#E6EDF3" Margin="0,0,0,16"/>
+
+        <!-- Mode selection -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,12">
+            <RadioButton x:Name="RbInf" Content="📁 Из INF-файла (локальный драйвер)"
+                         IsChecked="True" Foreground="#C9D1D9" Margin="0,4"
+                         FontSize="13" Checked="ModeChanged"/>
+            <RadioButton x:Name="RbUnc" Content="🌐 По UNC-пути (сетевой принтер: \\server\printer)"
+                         Foreground="#C9D1D9" Margin="0,4"
+                         FontSize="13" Checked="ModeChanged"/>
+            <RadioButton x:Name="RbAuto" Content="🔍 Авто — поиск в DriverStore Windows"
+                         Foreground="#C9D1D9" Margin="0,4"
+                         FontSize="13" Checked="ModeChanged"/>
+        </StackPanel>
+
+        <!-- Input area -->
+        <Grid Grid.Row="2">
+            <!-- INF panel -->
+            <StackPanel x:Name="InfPanel" Visibility="Visible">
+                <TextBlock Text="Путь к INF-файлу:" Foreground="#8B949E" Margin="0,0,0,6"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TxtInfPath" Grid.Column="0"
+                             Background="#161B22" Foreground="#E6EDF3"
+                             BorderBrush="#30363D" Padding="8,6"
+                             FontSize="12"/>
+                    <Button x:Name="BtnBrowse" Grid.Column="1" Content="Обзор..."
+                            Margin="6,0,0,0" Padding="12,6"
+                            Background="#1A3A5C" Foreground="#58A6FF"
+                            BorderBrush="#2D7FF9" BorderThickness="1"
+                            Click="BrowseInf_Click" Cursor="Hand"/>
+                </Grid>
+                <TextBlock Text="Поддерживаются файлы .inf от производителя принтера"
+                           Foreground="#484F58" FontSize="11" Margin="0,6,0,0"/>
+            </StackPanel>
+
+            <!-- UNC panel -->
+            <StackPanel x:Name="UncPanel" Visibility="Collapsed">
+                <TextBlock Text="UNC-путь к принтеру:" Foreground="#8B949E" Margin="0,0,0,6"/>
+                <TextBox x:Name="TxtUncPath"
+                         Background="#161B22" Foreground="#E6EDF3"
+                         BorderBrush="#30363D" Padding="8,6"
+                         FontSize="12"
+                         Text="\\"/>
+                <TextBlock Text="Пример: \\printserver\HP_LaserJet_2055"
+                           Foreground="#484F58" FontSize="11" Margin="0,6,0,0"/>
+            </StackPanel>
+
+            <!-- Auto panel -->
+            <StackPanel x:Name="AutoPanel" Visibility="Collapsed">
+                <Border Background="#0D2137" CornerRadius="6" Padding="12" Margin="0,4">
+                    <StackPanel>
+                        <TextBlock Text="ℹ️ Автоматический режим" FontWeight="SemiBold" Foreground="#58A6FF" Margin="0,0,0,4"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#8B949E" FontSize="12"
+                                   Text="Программа найдёт текущий драйвер выбранного принтера в DriverStore Windows, удалит его и переустановит. Для этого необходимо выбрать принтер в списке слева."/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Отмена" Padding="16,8"
+                    Background="#21262D" Foreground="#8B949E"
+                    BorderBrush="#30363D" BorderThickness="1"
+                    Click="Cancel_Click" Cursor="Hand" Margin="0,0,8,0"/>
+            <Button Content="▶ Установить" Padding="16,8"
+                    Background="#1A3A5C" Foreground="#58A6FF"
+                    BorderBrush="#2D7FF9" BorderThickness="1"
+                    FontWeight="SemiBold"
+                    Click="Ok_Click" Cursor="Hand"/>
+        </StackPanel>
+    </Grid>
+</Window>
