@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "src/W-Fix.App/bin/Debug/net8.0-windows"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "W-Fix"
+	}
+}

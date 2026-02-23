@@ -52,3 +52,6 @@ GenerateIcon.ps1
 *.p12
 appsettings.Local.json
 secrets.json
+
+# ── AI Agents / Assistants ────────────────────────────────────────────────────
+.agents/
