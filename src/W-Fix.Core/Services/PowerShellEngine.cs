@@ -1,5 +1,6 @@
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using System.Security;
 using System.Text;
 using WFix.Core.Models;
 
@@ -22,8 +23,17 @@ public class PowerShellEngine : IDisposable
     public PowerShellEngine(string? remoteComputer = null, string? username = null, string? password = null)
     {
         _remoteComputer = remoteComputer;
-        _username = username;
-        _password = password;
+        if (!string.IsNullOrWhiteSpace(remoteComputer) && string.IsNullOrWhiteSpace(username) &&
+            RemoteCredentialContext.TryResolve(remoteComputer, out var contextualUser, out var contextualPassword))
+        {
+            _username = contextualUser;
+            _password = contextualPassword;
+        }
+        else
+        {
+            _username = username;
+            _password = password;
+        }
     }
 
     /// <summary>
@@ -66,6 +76,7 @@ public class PowerShellEngine : IDisposable
         CancellationToken ct)
     {
         var lines = new List<string>();
+        SecureString? securePassword = null;
 
         try
         {
@@ -77,21 +88,17 @@ public class PowerShellEngine : IDisposable
 
             if (!string.IsNullOrEmpty(_remoteComputer))
             {
-                var sb = new StringBuilder();
-                sb.Append("Invoke-Command -ComputerName '");
-                sb.Append(_remoteComputer.Replace("'", "''"));
-                sb.Append("' -ScriptBlock { ");
-                sb.Append(script);
-                sb.Append(" }");
+                ps.AddCommand("Invoke-Command")
+                    .AddParameter("ComputerName", _remoteComputer)
+                    .AddParameter("ScriptBlock", ScriptBlock.Create(script));
                 if (!string.IsNullOrEmpty(_username))
                 {
-                    sb.Append(" -Credential (New-Object System.Management.Automation.PSCredential('");
-                    sb.Append(_username.Replace("'", "''"));
-                    sb.Append("', (ConvertTo-SecureString '");
-                    sb.Append((_password ?? "").Replace("'", "''"));
-                    sb.Append("' -AsPlainText -Force)))");
+                    securePassword = new SecureString();
+                    foreach (var character in _password ?? string.Empty)
+                        securePassword.AppendChar(character);
+                    securePassword.MakeReadOnly();
+                    ps.AddParameter("Credential", new PSCredential(_username, securePassword));
                 }
-                ps.AddScript(sb.ToString());
             }
             else
             {
@@ -138,6 +145,10 @@ public class PowerShellEngine : IDisposable
         {
             lines.Add($"[EXCEPTION] {ex.Message}");
             return PowerShellExecutionResult.Create(lines, ex.Message);
+        }
+        finally
+        {
+            securePassword?.Dispose();
         }
     }
 

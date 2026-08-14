@@ -5,9 +5,17 @@ namespace WFix.App;
 
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow(ViewModels.MainWindowViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
+    }
+
+    private void OpenRemoteCenter_Click(object sender, RoutedEventArgs e)
+    {
+        var window = ((App)Application.Current).CreateRemoteCenterWindow();
+        window.Owner = this;
+        window.Show();
     }
 
     private void ClearLog_Click(object sender, RoutedEventArgs e)

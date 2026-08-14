@@ -15,7 +15,7 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
 
     <!-- Metadata -->
-    <Version>2.2.0</Version>
+    <Version>3.0.0-beta.1</Version>
     <Authors>OneDeadMachine</Authors>
     <Company>OneDeadMachine</Company>
     <Product>W-Fix — Printer Troubleshooter</Product>
@@ -33,6 +33,7 @@
   <ItemGroup>
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
   </ItemGroup>
 

@@ -1,0 +1,268 @@
+<Window x:Class="WFix.App.RemoteCenterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.modernwpf.com/2019"
+        ui:WindowHelper.UseModernWindowStyle="True"
+        Title="W-Fix v3 — Remote Repair Center"
+        Width="1440" Height="880" MinWidth="1120" MinHeight="680"
+        Background="#0D1117" Foreground="#E6EDF3"
+        FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="RemoteCard" TargetType="Border">
+            <Setter Property="Background" Value="#161B22"/>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+        <Style x:Key="RemoteButton" TargetType="Button">
+            <Setter Property="Background" Value="#21262D"/>
+            <Setter Property="Foreground" Value="#E6EDF3"/>
+            <Setter Property="BorderBrush" Value="#58A6FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0D1117"/>
+            <Setter Property="Foreground" Value="#E6EDF3"/>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="Padding" Value="7"/>
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background" Value="#0D1117"/>
+            <Setter Property="Foreground" Value="#E6EDF3"/>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="Padding" Value="7"/>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#0D1117"/>
+            <Setter Property="Foreground" Value="#E6EDF3"/>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#30363D"/>
+            <Setter Property="RowBackground" Value="#0D1117"/>
+            <Setter Property="AlternatingRowBackground" Value="#111820"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="58"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="34"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,0,0,1">
+            <Grid Margin="16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🌐" FontSize="24" Margin="0,0,10,0"/>
+                    <StackPanel>
+                        <TextBlock Text="Remote Repair Center" FontSize="18" FontWeight="SemiBold" Foreground="#58A6FF"/>
+                        <TextBlock Text="Preflight → Inventory → Diagnose → Repair → Verify → Rollback" Foreground="#8B949E" FontSize="11"/>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Параллельно:" VerticalAlignment="Center" Foreground="#8B949E"/>
+                    <TextBox Text="{Binding MaxConcurrency, UpdateSourceTrigger=PropertyChanged}" Width="38" Margin="6,0" TextAlignment="Center"/>
+                    <Button Content="1. Preflight" Command="{Binding RunPreflightCommand}" Style="{StaticResource RemoteButton}"/>
+                    <Button Content="2. Диагностика" Command="{Binding DiagnoseCommand}" Style="{StaticResource RemoteButton}"/>
+                    <Button Content="3. Ремонт" Command="{Binding ExecutePlansCommand}" Background="#1F6FEB" Style="{StaticResource RemoteButton}"/>
+                    <Button Content="Отмена" Command="{Binding CancelCommand}" BorderBrush="#F85149" Style="{StaticResource RemoteButton}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="330"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="390"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource RemoteCard}">
+                        <StackPanel>
+                            <TextBlock Text="Ручной список" FontWeight="SemiBold"/>
+                            <TextBlock Text="Имена, FQDN; разделители — пробел, запятая или новая строка" Foreground="#8B949E" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,7"/>
+                            <TextBox Text="{Binding ManualTargets, UpdateSourceTrigger=PropertyChanged}" Height="58" AcceptsReturn="True" TextWrapping="Wrap"/>
+                            <Button Content="＋ Добавить цели" Command="{Binding AddManualTargetsCommand}" Style="{StaticResource RemoteButton}" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource RemoteCard}">
+                        <StackPanel>
+                            <TextBlock Text="Active Directory" FontWeight="SemiBold"/>
+                            <DockPanel Margin="0,7,0,5">
+                                <Button DockPanel.Dock="Right" Content="Поиск" Command="{Binding SearchActiveDirectoryCommand}" Style="{StaticResource RemoteButton}"/>
+                                <TextBox Text="{Binding ActiveDirectorySearch, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <ListBox ItemsSource="{Binding ActiveDirectoryResults}" MaxHeight="150" Background="#0D1117" BorderBrush="#30363D">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="3">
+                                            <Button DockPanel.Dock="Right" Content="＋"
+                                                    Command="{Binding DataContext.AddActiveDirectoryTargetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}" Style="{StaticResource RemoteButton}" Padding="5,1"/>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                                <TextBlock Text="{Binding OperatingSystem}" FontSize="10" Foreground="#8B949E"/>
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource RemoteCard}">
+                        <StackPanel>
+                            <TextBlock Text="Полномочия" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding CredentialStatus}" Foreground="#58A6FF" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,7"/>
+                            <TextBox Text="{Binding CredentialUserName, UpdateSourceTrigger=PropertyChanged}" ToolTip="DOMAIN\user или user@domain" Margin="0,0,0,5"/>
+                            <PasswordBox x:Name="CredentialPassword" Margin="0,0,0,5"/>
+                            <Button Content="Сохранить в Credential Manager" Click="SaveCredential_Click" Style="{StaticResource RemoteButton}"/>
+                            <WrapPanel>
+                                <Button Content="Текущая учётка" Command="{Binding UseCurrentCredentialCommand}" Style="{StaticResource RemoteButton}"/>
+                                <Button Content="Удалить сохранённую" Command="{Binding DeleteSavedCredentialCommand}" Style="{StaticResource RemoteButton}" BorderBrush="#F85149"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource RemoteCard}">
+                        <StackPanel>
+                            <TextBlock Text="Цели" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <ItemsControl ItemsSource="{Binding Targets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#0D1117" BorderBrush="#30363D" BorderThickness="1" CornerRadius="5" Padding="7" Margin="0,2">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="×"
+                                                        Command="{Binding DataContext.RemoveTargetCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" Style="{StaticResource RemoteButton}" Padding="5,1" BorderBrush="#F85149"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding State}" Foreground="#58A6FF" FontSize="11"/>
+                                                    <TextBlock Text="{Binding Details}" Foreground="#8B949E" FontSize="10" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#30363D"/>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="1.1*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Style="{StaticResource RemoteCard}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Preflight и состояние целей" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                        <DataGrid ItemsSource="{Binding Targets}" AutoGenerateColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Компьютер" Binding="{Binding DisplayName}" Width="1.4*"/>
+                                <DataGridTextColumn Header="Состояние" Binding="{Binding State}" Width="*"/>
+                                <DataGridCheckBoxColumn Header="WinRM" Binding="{Binding Capabilities.WinRmAvailable}"/>
+                                <DataGridCheckBoxColumn Header="Admin" Binding="{Binding Capabilities.IsAdministrator}"/>
+                                <DataGridCheckBoxColumn Header="Spooler" Binding="{Binding Capabilities.SpoolerAvailable}"/>
+                                <DataGridCheckBoxColumn Header="User" Binding="{Binding Capabilities.HasInteractiveUser}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource RemoteCard}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Диагностические находки" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                        <DataGrid ItemsSource="{Binding Findings}" AutoGenerateColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Уровень" Binding="{Binding Severity}" Width="80"/>
+                                <DataGridTextColumn Header="Компьютер" Binding="{Binding Target.ConnectionName}" Width="120"/>
+                                <DataGridTextColumn Header="Принтер" Binding="{Binding PrinterName}" Width="120"/>
+                                <DataGridTextColumn Header="Причина" Binding="{Binding Title}" Width="*"/>
+                                <DataGridTextColumn Header="Уверенность" Binding="{Binding Confidence, StringFormat=P0}" Width="95"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+                <Border Grid.Row="2" Style="{StaticResource RemoteCard}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Подтверждаемый план ремонта" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                        <DataGrid ItemsSource="{Binding PlannedSteps}" AutoGenerateColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Компьютер" Binding="{Binding Computer}" Width="120"/>
+                                <DataGridTextColumn Header="Действие" Binding="{Binding Title}" Width="*"/>
+                                <DataGridTextColumn Header="Объект" Binding="{Binding Printer}" Width="140"/>
+                                <DataGridTextColumn Header="Риск" Binding="{Binding Risk}" Width="90"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#30363D"/>
+
+            <Border Grid.Column="4" Style="{StaticResource RemoteCard}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Результаты и отчёты" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Runs}" Background="#0D1117" BorderBrush="#30363D">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="#30363D" BorderThickness="0,0,0,1" Padding="8">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding Target.ConnectionName}" FontWeight="SemiBold"/>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" Foreground="#58A6FF"/>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Steps.Count, StringFormat='Шагов: {0}'}" Foreground="#8B949E"/>
+                                        <ItemsControl ItemsSource="{Binding Warnings}">
+                                            <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="#D29922" TextWrapping="Wrap"/></DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="Открыть отчёт"
+                                                Command="{Binding DataContext.OpenReportCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" Style="{StaticResource RemoteButton}" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Grid.Row="2" Content="Перезагрузить ожидающие машины" Command="{Binding RestartPendingCommand}"
+                            Style="{StaticResource RemoteButton}" BorderBrush="#D29922" HorizontalAlignment="Stretch" Margin="3,3,3,37"/>
+                    <Button Grid.Row="2" Content="Экспорт обезличенного support bundle" Click="ExportSupportBundle_Click"
+                            Style="{StaticResource RemoteButton}" BorderBrush="#58A6FF" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,1,0,0">
+            <DockPanel Margin="12,0">
+                <ProgressBar DockPanel.Dock="Right" Width="160" Height="5" IsIndeterminate="{Binding IsBusy}" Margin="12,0"/>
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#8B949E"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
