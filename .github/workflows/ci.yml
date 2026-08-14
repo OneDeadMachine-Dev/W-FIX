@@ -28,3 +28,23 @@ jobs:
 
       - name: NuGet vulnerability report
         run: dotnet list W-Fix.sln package --vulnerable --include-transitive
+
+      - name: Publish portable win-x64 executable
+        run: >-
+          dotnet publish src/W-Fix.App/W-Fix.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:IncludeAllContentForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o artifacts/publish/win-x64
+
+      - name: Upload beta test artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: W-Fix-${{ github.sha }}-win-x64
+          path: artifacts/publish/win-x64/W-Fix.exe
+          if-no-files-found: error
+          retention-days: 14
