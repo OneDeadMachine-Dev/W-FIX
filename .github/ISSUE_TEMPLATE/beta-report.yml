@@ -1,0 +1,65 @@
+name: Beta report / Отчёт beta-тестирования
+description: Report a W-Fix beta result without publishing secrets or organizational data.
+title: "[Beta]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за тестирование W-Fix. Не публикуйте пароли, реальные доменные имена, IP-адреса и необработанные логи. Прикладывайте только обезличенный support bundle.
+
+        Thank you for testing W-Fix. Do not publish passwords, real domain names, IP addresses, or raw logs. Attach only a sanitized support bundle.
+  - type: input
+    id: version
+    attributes:
+      label: W-Fix version / Версия W-Fix
+      placeholder: v3.0.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows
+      options:
+        - Windows 10
+        - Windows 11 23H2 or older
+        - Windows 11 24H2 or newer
+        - Mixed Windows 10/11
+    validations:
+      required: true
+  - type: dropdown
+    id: topology
+    attributes:
+      label: Network / Сеть
+      options:
+        - Local repair / Локальный ремонт
+        - Active Directory domain
+        - Workgroup / Одноранговая сеть
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario / Сценарий
+      description: What was broken and what repair was selected?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result / Результат
+      description: What succeeded, failed, rolled back, or required a reboot?
+    validations:
+      required: true
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Sanitized support bundle / Обезличенный support bundle
+      description: Drag the ZIP created by W-Fix here. This is optional.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation / Проверка конфиденциальности
+      options:
+        - label: I verified that this report contains no passwords, document contents, real domain names, or other sensitive organizational data.
+          required: true

@@ -1,0 +1,7 @@
+# Release and trust policy changes require maintainer review.
+* @OneDeadMachine-Dev
+/.github/workflows/ @OneDeadMachine-Dev
+/.signpath/ @OneDeadMachine-Dev
+/CODE_SIGNING_POLICY.md @OneDeadMachine-Dev
+/PRIVACY.md @OneDeadMachine-Dev
+/SECURITY.md @OneDeadMachine-Dev

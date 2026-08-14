@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  build-sign-release:
+    runs-on: windows-latest
+    environment: release
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$') {
+            throw "Unsupported release tag: $tag"
+          }
+          $notes = "docs/releases/$tag.md"
+          if (-not (Test-Path -LiteralPath $notes)) {
+            throw "Bilingual release notes are required: $notes"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$($Matches.version)" >> $env:GITHUB_OUTPUT
+          "notes=$notes" >> $env:GITHUB_OUTPUT
+          "prerelease=$($Matches.version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore W-Fix.sln
+
+      - name: Strict Release build
+        shell: pwsh
+        run: |
+          dotnet build W-Fix.sln --configuration Release --no-restore -warnaserror
+          dotnet build tools/W-Fix.CatalogSigner/W-Fix.CatalogSigner.csproj --configuration Release -warnaserror
+
+      - name: Test
+        run: dotnet test W-Fix.sln --configuration Release --no-build --logger "console;verbosity=minimal"
+
+      - name: NuGet vulnerability report
+        run: dotnet list W-Fix.sln package --vulnerable --include-transitive
+
+      - name: Publish portable win-x64 executable
+        run: >-
+          dotnet publish src/W-Fix.App/W-Fix.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --no-restore
+          -p:Version=${{ steps.metadata.outputs.version }}
+          -p:PublishSingleFile=true
+          -p:IncludeAllContentForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o artifacts/publish/win-x64
+
+      - name: Upload unsigned artifact for origin verification
+        id: upload-unsigned
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-w-fix-${{ steps.metadata.outputs.tag }}
+          path: artifacts/publish/win-x64/W-Fix.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Detect SignPath configuration
+        id: signpath-config
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          $values = @(
+            $env:SIGNPATH_API_TOKEN,
+            $env:SIGNPATH_ORGANIZATION_ID,
+            $env:SIGNPATH_PROJECT_SLUG,
+            $env:SIGNPATH_SIGNING_POLICY_SLUG,
+            $env:SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+          )
+          $enabled = -not ($values | Where-Object { [string]::IsNullOrWhiteSpace($_) })
+          "enabled=$($enabled.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Submit release-signing request to SignPath
+        if: steps.signpath-config.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: artifacts/signed
+          parameters: |
+            version: "${{ steps.metadata.outputs.version }}"
+
+      - name: Prepare signed or explicitly unsigned executable
+        id: executable
+        shell: pwsh
+        run: |
+          $signingEnabled = '${{ steps.signpath-config.outputs.enabled }}' -eq 'true'
+          $source = 'artifacts/publish/win-x64/W-Fix.exe'
+          if ($signingEnabled) {
+            $signed = @(Get-ChildItem -LiteralPath 'artifacts/signed' -Recurse -File -Filter 'W-Fix.exe')
+            if ($signed.Count -ne 1) {
+              throw "Expected exactly one signed W-Fix.exe, found $($signed.Count)."
+            }
+            $source = $signed[0].FullName
+            $signature = Get-AuthenticodeSignature -LiteralPath $source
+            if ($signature.Status -ne 'Valid' -or $null -eq $signature.TimeStamperCertificate) {
+              throw "Authenticode or timestamp verification failed: $($signature.Status)"
+            }
+          } else {
+            Write-Warning 'SignPath is not configured. This release will be explicitly published as unsigned.'
+          }
+          New-Item -ItemType Directory -Force -Path 'artifacts/release' | Out-Null
+          $name = "W-Fix-${{ steps.metadata.outputs.tag }}-win-x64.exe"
+          Copy-Item -LiteralPath $source -Destination "artifacts/release/$name"
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "signed=$($signingEnabled.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Sign and verify known-issues catalog
+        shell: pwsh
+        env:
+          KNOWN_ISSUES_PRIVATE_KEY_PEM: ${{ secrets.KNOWN_ISSUES_PRIVATE_KEY_PEM }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:KNOWN_ISSUES_PRIVATE_KEY_PEM)) {
+            throw 'KNOWN_ISSUES_PRIVATE_KEY_PEM is required for a release.'
+          }
+          $keyPath = Join-Path $env:RUNNER_TEMP 'known-issues-private.pem'
+          [IO.File]::WriteAllText($keyPath, $env:KNOWN_ISSUES_PRIVATE_KEY_PEM, [Text.UTF8Encoding]::new($false))
+          Copy-Item 'src/W-Fix.Core/Catalog/known-issues.json' 'artifacts/release/known-issues.json'
+          dotnet run --project tools/W-Fix.CatalogSigner --configuration Release --no-build -- sign `
+            artifacts/release/known-issues.json $keyPath artifacts/release/known-issues.json.sig
+          if ($LASTEXITCODE -ne 0) { throw 'Catalog signing failed.' }
+          dotnet run --project tools/W-Fix.CatalogSigner --configuration Release --no-build -- verify `
+            artifacts/release/known-issues.json src/W-Fix.Core/Catalog/known-issues-public.pem artifacts/release/known-issues.json.sig
+          if ($LASTEXITCODE -ne 0) { throw 'Catalog signature verification failed.' }
+          Remove-Item -LiteralPath $keyPath -Force
+
+      - name: Package and calculate checksums
+        shell: pwsh
+        run: |
+          $exe = 'artifacts/release/${{ steps.executable.outputs.name }}'
+          $zip = "artifacts/release/W-Fix-${{ steps.metadata.outputs.tag }}-win-x64.zip"
+          Compress-Archive -LiteralPath $exe -DestinationPath $zip -CompressionLevel Optimal
+          $files = @($exe, $zip, 'artifacts/release/known-issues.json', 'artifacts/release/known-issues.json.sig')
+          $lines = foreach ($file in $files) {
+            $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file
+            "$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($file))"
+          }
+          [IO.File]::WriteAllLines('artifacts/release/SHA256SUMS.txt', $lines, [Text.UTF8Encoding]::new($false))
+
+      - name: Upload final release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ steps.metadata.outputs.tag }}
+          path: artifacts/release/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $arguments = @(
+            'release', 'create', '${{ steps.metadata.outputs.tag }}',
+            '--verify-tag',
+            '--title', "W-Fix ${{ steps.metadata.outputs.version }}",
+            '--notes-file', '${{ steps.metadata.outputs.notes }}'
+          )
+          if ('${{ steps.metadata.outputs.prerelease }}' -eq 'true') {
+            $arguments += '--prerelease'
+          }
+          $arguments += @(Get-ChildItem -LiteralPath 'artifacts/release' -File | Select-Object -ExpandProperty FullName)
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }

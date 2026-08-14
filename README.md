@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Release](https://img.shields.io/badge/version-3.0.0--beta.1-blue)](https://github.com/OneDeadMachine/W-Fix/releases)
+[![Release](https://img.shields.io/badge/version-3.0.0--beta.1-blue)](https://github.com/OneDeadMachine-Dev/W-FIX/releases)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 [![Author](https://img.shields.io/badge/author-OneDeadMachine-red)](https://github.com/OneDeadMachine)
 
@@ -58,7 +58,7 @@
 
 ## 🚀 Быстрый старт
 
-1. Скачай `W-Fix.exe` из раздела [Releases](https://github.com/OneDeadMachine/W-Fix/releases)
+1. Скачай `W-Fix.exe` из раздела [Releases](https://github.com/OneDeadMachine-Dev/W-FIX/releases)
 2. Запусти **от имени администратора** (правой кнопкой → «Запуск от имени администратора»)
 3. Выбери принтер в левой панели
 4. Выбери фиксер в правой панели → нажми **«Применить»**
@@ -82,7 +82,7 @@
 
 ### Debug-запуск
 ```powershell
-git clone https://github.com/OneDeadMachine/W-Fix.git
+git clone https://github.com/OneDeadMachine-Dev/W-FIX.git
 cd W-Fix
 dotnet run --project src/W-Fix.App
 ```
