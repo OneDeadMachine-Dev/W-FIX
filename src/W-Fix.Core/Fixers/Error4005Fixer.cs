@@ -15,13 +15,24 @@ namespace WFix.Core.Fixers;
 ///   4. Очистка и перезапуск Spooler
 ///   5. Установка клиента локального порта (если удалён обновлением)
 /// </summary>
-public class Error4005Fixer : FixerBase
+public class Error4005Fixer : FixerBase, ISystemStateChangingFixer
 {
     public override string Name => "Ошибка 0x00004005 (Подключение)";
     public override string Description =>
         "Исправляет ошибку «Операция не может быть завершена (0x00004005)» при подключении к сетевому принтеру. " +
         "Возникает после обновлений Windows. Настраивает RPC, SMB, брандмауэр и Spooler.";
     public override string[] TargetErrorCodes => ["0x00004005", "4005", "operation_could_not_be_completed"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer) => new()
+    {
+        RegistryValues =
+        [
+            new(@"HKLM:\SYSTEM\CurrentControlSet\Control\Print", "RpcAuthnLevelPrivacyEnabled"),
+            new(@"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint", "RestrictDriverInstallationToAdministrators"),
+            new(@"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint", "NoWarningNoElevationOnInstall"),
+            new(@"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint", "UpdatePromptSettings")
+        ]
+    };
 
     public override async Task<FixResult> ApplyAsync(
         PrinterInfo? printer, string? remoteMachine,

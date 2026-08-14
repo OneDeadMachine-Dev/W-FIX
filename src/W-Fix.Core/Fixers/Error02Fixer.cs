@@ -20,13 +20,24 @@ namespace WFix.Core.Fixers;
 ///   4. Переустановка драйвера через pnputil (если возможно)
 ///   5. Перезапуск Spooler
 /// </summary>
-public class Error02Fixer : FixerBase
+public class Error02Fixer : FixerBase, ISystemStateChangingFixer
 {
     public override string Name => "Ошибка 0x00000002 (Файл не найден)";
     public override string Description =>
         "Исправляет ошибку «Системе не удаётся найти указанный файл (0x00000002)» при подключении к " +
         "сетевому принтеру. Чистит Print Processors, реестр PendingFileRename и настраивает Point and Print.";
     public override string[] TargetErrorCodes => ["0x00000002", "0x00000003", "file_not_found", "system_cannot_find"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer) => new()
+    {
+        RegistryValues =
+        [
+            new(@"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager", "PendingFileRenameOperations"),
+            new(@"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint", "RestrictDriverInstallationToAdministrators"),
+            new(@"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint", "NoWarningNoElevationOnInstall"),
+            new(@"HKLM:\SYSTEM\CurrentControlSet\Control\Print", "RpcAuthnLevelPrivacyEnabled")
+        ]
+    };
 
     public override async Task<FixResult> ApplyAsync(
         PrinterInfo? printer, string? remoteMachine,
