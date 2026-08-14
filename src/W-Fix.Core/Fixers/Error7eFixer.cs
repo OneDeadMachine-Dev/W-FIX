@@ -31,6 +31,7 @@ public class Error7eFixer : FixerBase
         IProgress<LogEntry>? progress, CancellationToken ct)
     {
         var steps = new List<LogEntry>();
+        var executionResults = new List<PowerShellExecutionResult>();
         void Report(LogEntry e) { steps.Add(e); progress?.Report(e); }
 
         Report(Info("Диагностика и исправление ошибки 0x0000007e..."));
@@ -72,7 +73,9 @@ public class Error7eFixer : FixerBase
             """;
 
         using var engine = new PowerShellEngine(remoteMachine);
-        var (_, out1, _) = await engine.RunAsync(step1, ct: ct);
+        var result1 = await engine.RunAsync(step1, ct: ct);
+        executionResults.Add(result1);
+        var out1 = result1.Output;
         ReportOutput(out1, Report);
 
         // ── Шаг 2: Удаление BIDI-ключа реестра ──────────────────────────────────
@@ -104,7 +107,9 @@ public class Error7eFixer : FixerBase
                 }
             ";
 
-            var (_, out2, _) = await engine.RunAsync(step2, ct: ct);
+            var result2 = await engine.RunAsync(step2, ct: ct);
+            executionResults.Add(result2);
+            var out2 = result2.Output;
             ReportOutput(out2, Report);
         }
         else
@@ -146,7 +151,9 @@ public class Error7eFixer : FixerBase
             }
             """;
 
-        var (_, out3, _) = await engine.RunAsync(step3, ct: ct);
+        var result3 = await engine.RunAsync(step3, ct: ct);
+        executionResults.Add(result3);
+        var out3 = result3.Output;
         ReportOutput(out3, Report);
 
         // ── Шаг 4: RPC + Spooler ───────────────────────────────────────────────
@@ -165,12 +172,17 @@ public class Error7eFixer : FixerBase
             Write-Output "[OK] Spooler: $status"
             """;
 
-        var (success, out4, error) = await engine.RunAsync(step4, ct: ct);
+        var result4 = await engine.RunAsync(step4, ct: ct);
+        executionResults.Add(result4);
+        var out4 = result4.Output;
         ReportOutput(out4, Report);
 
         Report(Info("Рекомендация: попробуйте переподключить принтер."));
 
-        return success
+        var allStepsSucceeded = executionResults.All(result => result.Success);
+        var error = executionResults.FirstOrDefault(result => !result.Success)?.Error;
+
+        return allStepsSucceeded
             ? FixResult.Ok("Фикс 0x0000007e выполнен — mscms.dll на месте, BIDI очищен", steps)
             : FixResult.Warn($"Фикс 0x0000007e частично: {error}", steps);
     }

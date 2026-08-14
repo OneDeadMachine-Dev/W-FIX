@@ -17,10 +17,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Serilog" Version="4.1.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.6" />
+    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.18" />
+    <!-- Explicitly pin the patched .NET 8 line; older PowerShell SDKs pulled vulnerable 8.0.2 transitively. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.4" />
   </ItemGroup>
 
   <!-- Windows-specific AD / WMI — NuGet packages (required for single-file publish) -->

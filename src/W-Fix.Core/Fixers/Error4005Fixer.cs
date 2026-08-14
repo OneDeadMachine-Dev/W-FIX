@@ -28,6 +28,7 @@ public class Error4005Fixer : FixerBase
         IProgress<LogEntry>? progress, CancellationToken ct)
     {
         var steps = new List<LogEntry>();
+        var executionResults = new List<PowerShellExecutionResult>();
         void Report(LogEntry e) { steps.Add(e); progress?.Report(e); }
 
         Report(Info("Диагностика и исправление ошибки 0x00004005..."));
@@ -53,8 +54,14 @@ public class Error4005Fixer : FixerBase
             """;
 
         using var engine = remoteMachine != null ? new PowerShellEngine(remoteMachine) : null;
-        async Task<(bool, IReadOnlyList<string>, string?)> RunPS(string script) =>
-            engine != null ? await engine.RunAsync(script, ct: ct) : await PowerShellEngine.RunExternalAsync(script, ct);
+        async Task<PowerShellExecutionResult> RunPS(string script)
+        {
+            var result = engine != null
+                ? await engine.RunAsync(script, ct: ct)
+                : await PowerShellEngine.RunExternalAsync(script, ct);
+            executionResults.Add(result);
+            return result;
+        }
 
         var (_, out1, _) = await RunPS(step1);
         ReportOutput(out1, Report);
@@ -187,7 +194,10 @@ public class Error4005Fixer : FixerBase
         Report(Info("═══════════════════════════════════════════════════"));
         Report(Info("Рекомендация: перезагрузите компьютер для применения всех изменений реестра."));
 
-        return spoolerResult.Status == FixStatus.Success
+        var allStepsSucceeded = executionResults.All(result => result.Success) &&
+                                steps.All(step => step.Level != Models.LogLevel.Error);
+
+        return spoolerResult.Status == FixStatus.Success && allStepsSucceeded
             ? FixResult.Ok("Фикс 0x00004005 выполнен. Рекомендуется перезагрузка.", steps)
             : FixResult.Warn("Фикс 0x00004005 частично выполнен — проверьте логи", steps);
     }
