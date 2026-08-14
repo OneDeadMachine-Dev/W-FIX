@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Release](https://img.shields.io/badge/version-2.2.0-green)](https://github.com/OneDeadMachine/W-Fix/releases)
+[![Release](https://img.shields.io/badge/version-3.0.0--beta.1-blue)](https://github.com/OneDeadMachine/W-Fix/releases)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 [![Author](https://img.shields.io/badge/author-OneDeadMachine-red)](https://github.com/OneDeadMachine)
 
@@ -44,6 +44,10 @@
 | 12 | **Принтер по умолчанию** | Default printer | Сброс реестра + `SetDefaultPrinter` |
 
 ### Плюс:
+- 🌐 **Remote Repair Center v3** — несколько доменных ПК, preflight, инвентаризация, автоматический план, проверка и изолированный rollback
+- 🧠 **Диагностические правила** — вывод по наблюдаемым фактам, уверенность и официальный источник известной проблемы
+- 🔐 **Credential Manager** — альтернативная доменная учётная запись без пароля в конфигурации, CLI или логах
+- 📊 **Отчёты** — JSON/HTML для каждого запуска и обезличенный ZIP support bundle
 - 🌐 **Удалённые машины** — системные шаги через WinRM, а пользовательские настройки принтера — в реальном интерактивном сеансе
 - 🔍 **Обнаружение принтеров** — CIM / WMI / Get-Printer (тройной fallback)
 - 📋 **Полный лог** — каждый шаг фиксера отображается в реальном времени
@@ -58,6 +62,13 @@
 2. Запусти **от имени администратора** (правой кнопкой → «Запуск от имени администратора»)
 3. Выбери принтер в левой панели
 4. Выбери фиксер в правой панели → нажми **«Применить»**
+
+Для нескольких компьютеров открой **Remote Center**:
+
+1. Добавь имена вручную либо через поиск Active Directory.
+2. Выполни **Preflight** — ping носит справочный характер, рабочее подключение определяется по WinRM.
+3. Запусти **Диагностику**, проверь факты и сформированный план.
+4. Подтверди пакетный ремонт. Сбой одной машины не останавливает остальные; обратимые шаги неуспешной цели откатываются.
 
 > ⚠️ Права администратора обязательны — фиксеры изменяют реестр и службы Windows.
 
@@ -96,6 +107,11 @@ dotnet publish src/W-Fix.App/W-Fix.App.csproj `
 W-Fix/
 ├── src/
 │   ├── W-Fix.Core/               # Бизнес-логика
+│   │   ├── Abstractions/          # Контракты сессии, диагностики, ремонта и отчётов
+│   │   ├── Remote/                # WinRM preflight и инвентаризация
+│   │   ├── Diagnostics/           # Evidence-based правила
+│   │   ├── Repair/                # Планировщик, legacy-адаптер и batch executor
+│   │   ├── Catalog/               # Подписанный каталог Windows known issues
 │   │   ├── Fixers/               # 12 фиксеров (FixerBase → IFixer)
 │   │   ├── Services/
 │   │   │   ├── WmiService.cs     # Обнаружение принтеров (CIM/WMI/PS)
@@ -106,6 +122,7 @@ W-Fix/
 │   │   └── Models/               # PrinterInfo, FixResult, LogEntry ...
 │   └── W-Fix.App/                # WPF UI (MVVM + CommunityToolkit)
 │       ├── ViewModels/
+│       ├── RemoteCenterWindow.xaml
 │       ├── Views/
 │       └── Assets/icon.ico
 └── publish/W-Fix.exe             # Готовый портативный файл
@@ -115,6 +132,9 @@ W-Fix/
 
 Подробности внутренних границ, выполнения PowerShell и правил для фиксеров:
 [docs/architecture.md](docs/architecture.md).
+
+Работа с новым центром: [docs/remote-center.md](docs/remote-center.md). Формат и подпись базы проблем:
+[docs/known-issues-catalog.md](docs/known-issues-catalog.md).
 
 ---
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-14T00:00:00Z",
+  "expiresAt": "2030-01-01T00:00:00Z",
+  "entries": [
+    {
+      "id": "windows11.kb5079473.usb-ipp",
+      "title": "Возможный сбой USB IPP после KB5079473",
+      "description": "Состав системы совпадает с известной Microsoft проблемой сторонних драйверов USB IPP МФУ.",
+      "severity": "error",
+      "confidence": 0.85,
+      "affectedOperatingSystems": [ "Windows 11" ],
+      "requiredKnowledgeBaseIds": [ "KB5079473" ],
+      "portKinds": [ "USB", "IPP" ],
+      "thirdPartyDriverOnly": true,
+      "recommendedActionIds": [ "legacy:ipp" ],
+      "officialSource": "https://learn.microsoft.com/en-us/troubleshoot/windows-hardware/drivers/known-issues-third-party-drivers"
+    }
+  ]
+}

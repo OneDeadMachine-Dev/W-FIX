@@ -11,10 +11,10 @@ namespace WFix.App.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
     // ── Services ─────────────────────────────────────────────────────────────
-    private readonly WmiService _wmi = new();
-    private readonly ActiveDirectoryService _ad = new();
-    private readonly FixerRegistry _registry = new();
-    private readonly SystemStateBackupService _stateBackup = new();
+    private readonly WmiService _wmi;
+    private readonly ActiveDirectoryService _ad;
+    private readonly FixerRegistry _registry;
+    private readonly SystemStateBackupService _stateBackup;
 
     // ── Collections ───────────────────────────────────────────────────────────
     public ObservableCollection<PrinterInfo> Printers { get; } = [];
@@ -49,8 +49,17 @@ public partial class MainWindowViewModel : ObservableObject
     private int _loadingOperations;
     private SystemStateBackupResult? _lastBackup;
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(
+        WmiService wmi,
+        ActiveDirectoryService ad,
+        FixerRegistry registry,
+        SystemStateBackupService stateBackup)
     {
+        _wmi = wmi ?? throw new ArgumentNullException(nameof(wmi));
+        _ad = ad ?? throw new ArgumentNullException(nameof(ad));
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _stateBackup = stateBackup ?? throw new ArgumentNullException(nameof(stateBackup));
+
         AdStatusText = _ad.IsDomainAvailable
             ? $"AD: {_ad.DomainName}"
             : "AD: домен недоступен (локальный режим)";
@@ -123,7 +132,7 @@ public partial class MainWindowViewModel : ObservableObject
         var logDir = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "W-Fix", "Logs");
-            
+
         if (System.IO.Directory.Exists(logDir))
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -492,8 +501,8 @@ public class LogEntryViewModel(LogLevel level, string message)
     {
         LogLevel.Success => "✅",
         LogLevel.Warning => "⚠️",
-        LogLevel.Error   => "❌",
-        _                => "ℹ️"
+        LogLevel.Error => "❌",
+        _ => "ℹ️"
     };
     public string TimeStr => Timestamp.ToString("HH:mm:ss");
 }
