@@ -28,6 +28,10 @@ internal sealed class PairProtocolSerializer
         PropertyNameCaseInsensitive = false,
         MaxDepth = 32
     };
+    private static readonly HashSet<string> AllowedParameterNames = new(StringComparer.Ordinal)
+    {
+        "hostName", "printerName", "shareName"
+    };
 
     public byte[] Serialize<T>(PairMessageKind kind, T message)
     {
@@ -68,11 +72,21 @@ internal sealed class PairProtocolSerializer
         ArgumentNullException.ThrowIfNull(message);
         if (message is PairActionRequest request)
         {
-            if (!request.Step.ActionId.StartsWith("pair.", StringComparison.Ordinal) || request.Step.ActionId.Length > 128)
-                throw new InvalidDataException("Через pairing-транспорт разрешены только встроенные действия pair.*.");
-            if (request.Step.Parameters.Count > 16 || request.Step.Parameters.Any(pair => pair.Key.Length > 64 || pair.Value.Length > 1024))
-                throw new InvalidDataException("Параметры pairing-действия превышают допустимые ограничения.");
+            if (!Guid.TryParseExact(request.RequestId, "N", out _) || !Enum.IsDefined(request.Operation))
+                throw new InvalidDataException("Некорректный pairing action request.");
+            ValidateStep(request.Step);
         }
+        if (message is PairRepairPlan plan)
+            foreach (var step in plan.Steps) ValidateStep(step);
+    }
+
+    private static void ValidateStep(PairRepairStep step)
+    {
+        if (!step.ActionId.StartsWith("pair.", StringComparison.Ordinal) || step.ActionId.Length > 128)
+            throw new InvalidDataException("Через pairing-транспорт разрешены только встроенные действия pair.*.");
+        if (step.Parameters.Count > AllowedParameterNames.Count || step.Parameters.Any(pair =>
+                !AllowedParameterNames.Contains(pair.Key) || pair.Value.Length > 1024))
+            throw new InvalidDataException("Pairing-действие содержит параметр вне allowlist.");
     }
 
     private sealed record Envelope(int Version, PairMessageKind Kind, JsonElement Payload);

@@ -28,3 +28,18 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 Until SignPath approval, public beta releases remain explicitly marked unsigned and include SHA-256 checksums. For internal testing, a separately documented self-signed certificate may be trusted manually on managed test computers; it is never presented as publicly trusted.
 
 See also [Privacy Policy](PRIVACY.md) and [Security Policy](SECURITY.md).
+
+## One-time catalog key bootstrap / Первичная настройка ключа каталога
+
+Владелец релиза выполняет это локально один раз. Закрытый файл не коммитится и удаляется сразу после записи секрета:
+
+```powershell
+dotnet run --project tools/W-Fix.CatalogSigner -- generate private.pem public.pem
+Get-Content private.pem -Raw | gh secret set KNOWN_ISSUES_PRIVATE_KEY_PEM --repo OneDeadMachine-Dev/W-FIX
+Copy-Item public.pem src/W-Fix.Core/Catalog/known-issues-public.pem
+Remove-Item private.pem, public.pem -Force
+```
+
+После обновления публичного ключа требуется обычный PR и проверка `verify` на тестовой подписи. SignPath identifiers добавляются как repository variables, а `SIGNPATH_API_TOKEN` — только как Environment secret `release`. Окружение `release` требует ручного подтверждения владельца и принимает только теги `v*`.
+
+The release owner performs this once on a trusted local machine. The private file is never committed and is deleted immediately after the secret is stored. Updating the public key requires a normal PR and a test `verify` run. SignPath identifiers are repository variables; `SIGNPATH_API_TOKEN` is restricted to the `release` Environment secret. The `release` environment requires manual owner approval and accepts only `v*` tags.

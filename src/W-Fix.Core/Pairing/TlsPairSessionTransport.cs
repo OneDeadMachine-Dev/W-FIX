@@ -43,7 +43,8 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
             CreatedAt = createdAt,
             ExpiresAt = createdAt + options.InvitationLifetime,
             PrinterName = options.PrinterName,
-            ShareName = options.ShareName
+            ShareName = options.ShareName,
+            ExpectedClientComputerName = options.ExpectedClientComputerName
         };
         validator.Validate(invitation, createdAt);
         return Task.FromResult<IPairHost>(new PairHost(listener, certificate, invitation));
@@ -52,6 +53,9 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
     public async Task<IPairSession> JoinAsync(PairInvitation invitation, CancellationToken cancellationToken = default)
     {
         validator.Validate(invitation, DateTimeOffset.UtcNow);
+        if (!string.IsNullOrWhiteSpace(invitation.ExpectedClientComputerName) &&
+            !string.Equals(invitation.ExpectedClientComputerName, Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+            throw new AuthenticationException($"Приглашение предназначено для ПК '{invitation.ExpectedClientComputerName}', а не для '{Environment.MachineName}'.");
         Exception? lastError = null;
         foreach (var addressText in invitation.HostAddresses)
         {
@@ -74,6 +78,9 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
                 var hostHello = await session.ReceiveHandshakeAsync(cancellationToken);
                 if (!string.Equals(hostHello.SessionId, invitation.SessionId, StringComparison.Ordinal))
                     throw new AuthenticationException("Pair Session ID хоста не совпадает с приглашением.");
+                if (!string.Equals(hostHello.ComputerName, invitation.HostComputerName, StringComparison.OrdinalIgnoreCase))
+                    throw new AuthenticationException("Имя pairing-хоста не совпадает с приглашением.");
+                session.SetPeerComputerName(hostHello.ComputerName);
                 session.MarkAwaitingApproval();
                 return session;
             }
@@ -185,7 +192,11 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
                 var clientHello = await session.ReceiveHandshakeAsync(expiry.Token);
                 if (!string.Equals(clientHello.SessionId, Invitation.SessionId, StringComparison.Ordinal))
                     throw new AuthenticationException("Pair Session ID клиента не совпадает с приглашением.");
-                await session.SendHandshakeAsync(new PairHello(Invitation.SessionId, Environment.MachineName), expiry.Token);
+                if (!string.IsNullOrWhiteSpace(Invitation.ExpectedClientComputerName) &&
+                    !string.Equals(clientHello.ComputerName, Invitation.ExpectedClientComputerName, StringComparison.OrdinalIgnoreCase))
+                    throw new AuthenticationException("К pairing-хосту подключился другой компьютер.");
+                session.SetPeerComputerName(clientHello.ComputerName);
+                await session.SendHandshakeAsync(new PairHello(Invitation.SessionId, Invitation.HostComputerName), expiry.Token);
                 session.MarkAwaitingApproval();
                 return session;
             }
@@ -216,6 +227,7 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
 
         public PairInvitation Invitation { get; } = invitation;
         public PairEndpointRole LocalRole { get; } = localRole;
+        public string PeerComputerName { get; private set; } = "";
         public PairSessionState State { get; private set; } = PairSessionState.Connected;
         public string ConfirmationCode => Invitation.ConfirmationCode;
 
@@ -249,6 +261,7 @@ public sealed class TlsPairSessionTransport(IPairInvitationValidator validator) 
             ReceiveCoreAsync<PairHello>(PairMessageKind.Hello, cancellationToken);
 
         internal void MarkAwaitingApproval() => State = PairSessionState.AwaitingApproval;
+        internal void SetPeerComputerName(string value) => PeerComputerName = value;
 
         private async Task SendCoreAsync<T>(PairMessageKind kind, T message, CancellationToken cancellationToken)
         {

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Authentication;
 using System.Text.Json.Nodes;
 using WFix.Core.Abstractions;
 using WFix.Core.Models;
@@ -60,7 +61,7 @@ public sealed class PairProtocolSerializerTests
     public void Serializer_rejects_non_pair_action()
     {
         var serializer = new PairProtocolSerializer();
-        var request = new PairActionRequest("r1", PairActionOperation.Execute, new PairRepairStep
+        var request = new PairActionRequest(Guid.NewGuid().ToString("N"), PairActionOperation.Execute, new PairRepairStep
         {
             Id = "s1",
             ActionId = "legacy:spooler",
@@ -184,6 +185,20 @@ public sealed class TlsPairSessionTransportTests
         await Assert.ThrowsAnyAsync<Exception>(async () => await accept);
     }
 
+    [Fact]
+    public async Task Join_rejects_invitation_for_another_client()
+    {
+        var transport = new TlsPairSessionTransport(new PairInvitationValidator());
+        await using var host = await transport.StartHostAsync(new PairHostOptions
+        {
+            HostComputerName = "localhost",
+            ExpectedClientComputerName = "ANOTHER-PC",
+            ListenAddresses = [IPAddress.Loopback],
+            InvitationLifetime = TimeSpan.FromMinutes(2)
+        });
+        await Assert.ThrowsAsync<AuthenticationException>(() => transport.JoinAsync(host.Invitation));
+    }
+
     private static PairEndpointSnapshot Snapshot(PairEndpointRole role, string name) => new()
     {
         Endpoint = new PairEndpointDescriptor { Role = role, ComputerName = name, IsLocalAgent = true }
@@ -222,6 +237,7 @@ public sealed class PairDiagnosticsAndPlannerTests
 
         Assert.Contains(plan.Steps, step => step.ActionId == "pair.firewall.file-print" && step.Endpoint == PairEndpointRole.Host);
         Assert.Contains(plan.Steps, step => step.ActionId == "pair.printer.share" && step.Endpoint == PairEndpointRole.Host);
+        Assert.Contains(plan.Steps, step => step.ActionId == "pair.printer.grant-print" && step.Endpoint == PairEndpointRole.Host);
         Assert.Contains(plan.Steps, step => step.ActionId == "pair.printer.connect" && step.Endpoint == PairEndpointRole.Client);
         var shareStep = Assert.Single(plan.Steps, step => step.ActionId == "pair.printer.share");
         var connectStep = Assert.Single(plan.Steps, step => step.ActionId == "pair.printer.connect");
@@ -289,6 +305,29 @@ public sealed class PairRepairExecutorTests
         }
     }
 
+    [Fact]
+    public async Task Unexpected_action_exception_still_rolls_back_prepared_step()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "wfix-pair-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var dispatcher = new FakeDispatcher(failVerificationFor: "", throwExecutionFor: "s1");
+            var executor = new PairRepairExecutor(dispatcher, new PairRunReportService(root), root);
+            var targets = new Dictionary<PairEndpointRole, TargetDescriptor>
+            {
+                [PairEndpointRole.Host] = TargetDescriptor.Local(),
+                [PairEndpointRole.Client] = TargetDescriptor.Local()
+            };
+            var run = await executor.ExecuteAsync(Plan(), targets);
+            Assert.Equal(PairRunStatus.RolledBack, run.Status);
+            Assert.Equal(["s1"], dispatcher.RollbackOrder);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
     private static PairRepairPlan Plan() => new()
     {
         Id = Guid.NewGuid().ToString("N"),
@@ -302,15 +341,18 @@ public sealed class PairRepairExecutorTests
         ]
     };
 
-    private sealed class FakeDispatcher(string failVerificationFor) : IPairActionDispatcher
+    private sealed class FakeDispatcher(string failVerificationFor, string? throwExecutionFor = null) : IPairActionDispatcher
     {
         public List<string> RollbackOrder { get; } = [];
 
         public Task<PairActionCheckpoint> PrepareAsync(PairActionContext context, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PairActionCheckpoint { ActionId = context.Step.ActionId, Endpoint = context.Step.Endpoint });
 
-        public Task<PairActionResult> ExecuteAsync(PairActionContext context, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new PairActionResult { Success = true, Summary = "done" });
+        public Task<PairActionResult> ExecuteAsync(PairActionContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.Step.Id == throwExecutionFor) throw new ApplicationException("unexpected failure");
+            return Task.FromResult(new PairActionResult { Success = true, Summary = "done" });
+        }
 
         public Task<bool> VerifyAsync(PairActionContext context, CancellationToken cancellationToken = default) =>
             Task.FromResult(context.Step.Id != failVerificationFor);

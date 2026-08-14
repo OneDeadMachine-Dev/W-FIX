@@ -15,6 +15,9 @@ public sealed class PairInvitationValidator : IPairInvitationValidator
             throw new InvalidDataException("Некорректный Pair Session ID.");
         if (string.IsNullOrWhiteSpace(invitation.HostComputerName) || invitation.HostComputerName.Length > 255)
             throw new InvalidDataException("В приглашении отсутствует корректное имя хоста.");
+        if (invitation.ExpectedClientComputerName is { Length: > 255 } ||
+            invitation.ExpectedClientComputerName is not null && string.IsNullOrWhiteSpace(invitation.ExpectedClientComputerName))
+            throw new InvalidDataException("В приглашении указано некорректное имя ожидаемого клиента.");
         if (invitation.Port is < IPEndPoint.MinPort or > IPEndPoint.MaxPort)
             throw new InvalidDataException("Некорректный TCP-порт pairing-сессии.");
         if (invitation.HostAddresses.Count is < 1 or > 16 || invitation.HostAddresses.Any(address => !IPAddress.TryParse(address, out _)))

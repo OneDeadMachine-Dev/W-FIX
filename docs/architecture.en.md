@@ -23,3 +23,19 @@ short-lived `PSCredential`; it is never embedded in a PowerShell script, process
 The known-issues catalog is declarative. A valid ECDSA signature does not grant code execution: catalog entries can
 only reference action IDs compiled into W-Fix. Microsoft source URLs are restricted to `learn.microsoft.com` and
 `support.microsoft.com`.
+
+## Pair Repair v3.1 pipeline
+
+`IPairSessionTransport` creates a one-time TLS session with a temporary ECDSA P-256 certificate. The client checks
+the public-key pin from `.wfixpair`; both windows show the derived six-digit code, and application messages remain
+blocked until both users approve. The protocol accepts only versioned DTOs and built-in `pair.*` identifiers. It
+cannot carry PowerShell source or passwords.
+
+`IPairInventoryService` checks only the explicitly named peer. `IPairRepairExecutor` runs the shared plan as a
+two-node saga: remote host steps go through `PairAgentCommandLoop`, while client steps use the local dispatcher.
+Every mutation has a checkpoint. Failure, cancellation, timeout, or connection loss triggers reverse rollback and
+an explicit `abort`; `commit` is sent only after every verification passes.
+
+The host Firewall lease is scoped to the current executable, exact port, `LocalSubnet`, and Private/Domain profiles.
+Offline ECDSA-signed snapshots detect tampering, but each side repairs independently and therefore cannot offer
+cross-machine automatic rollback. A `HOST\\User` password is written directly to Windows Credential Manager.

@@ -20,6 +20,7 @@ public interface IPairSession : IAsyncDisposable
 {
     PairInvitation Invitation { get; }
     PairEndpointRole LocalRole { get; }
+    string PeerComputerName { get; }
     PairSessionState State { get; }
     string ConfirmationCode { get; }
 
@@ -40,6 +41,7 @@ public sealed record PairHostOptions
     public IReadOnlyList<IPAddress>? ListenAddresses { get; init; }
     public string? PrinterName { get; init; }
     public string? ShareName { get; init; }
+    public string? ExpectedClientComputerName { get; init; }
     public TimeSpan InvitationLifetime { get; init; } = TimeSpan.FromMinutes(15);
 }
 
