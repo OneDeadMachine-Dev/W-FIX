@@ -1,6 +1,7 @@
 using WFix.Core.Fixers;
 using WFix.Core.Models;
 using WFix.Core.Services;
+using System.Management.Automation.Language;
 
 namespace WFix.Core.Tests;
 
@@ -25,6 +26,29 @@ public sealed class SystemStateBackupServiceTests
         Assert.Contains("Export-Clixml", script);
         Assert.DoesNotContain("__VALUE_TARGETS__", script);
         Assert.DoesNotContain("__FIXER_NAME__", script);
+    }
+
+    [Fact]
+    public void BuildBackupScript_RemoteHkcu_ResolvesInteractiveUserHive()
+    {
+        var plan = new SystemStateBackupPlan
+        {
+            RegistryValues =
+            [
+                new RegistryValueBackupTarget(@"HKCU:\Software\W-Fix", "Device")
+            ]
+        };
+
+        var script = SystemStateBackupService.BuildBackupScript(
+            "Remote user test",
+            plan,
+            resolveInteractiveHkcu: true);
+        Parser.ParseInput(script, out _, out var parseErrors);
+
+        Assert.Empty(parseErrors);
+        Assert.Contains("$resolveInteractiveHkcu = $true", script);
+        Assert.Contains("Registry::HKEY_USERS\\$interactiveUserSid", script);
+        Assert.Contains("HKCU сопоставлен", script);
     }
 
     [Fact]

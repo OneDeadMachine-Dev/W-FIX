@@ -27,8 +27,9 @@ public sealed class SystemStateBackupService
         if (plan.IsEmpty)
             return new SystemStateBackupResult { Success = true, Skipped = true };
 
+        var resolveInteractiveHkcu = !string.IsNullOrWhiteSpace(remoteMachine) && UsesCurrentUserHive(plan);
         var execution = await ExecuteAsync(
-            BuildBackupScript(fixer.Name, plan), remoteMachine, ct);
+            BuildBackupScript(fixer.Name, plan, resolveInteractiveHkcu), remoteMachine, ct);
         var backupDirectory = execution.Output
             .FirstOrDefault(line => line.StartsWith(BackupMarker, StringComparison.OrdinalIgnoreCase))?
             [BackupMarker.Length..].Trim();
@@ -75,7 +76,10 @@ public sealed class SystemStateBackupService
         return await ExecuteAsync(script, backup.RemoteMachine, ct);
     }
 
-    internal static string BuildBackupScript(string fixerName, SystemStateBackupPlan plan)
+    internal static string BuildBackupScript(
+        string fixerName,
+        SystemStateBackupPlan plan,
+        bool resolveInteractiveHkcu = false)
     {
         var template = """
             $ErrorActionPreference = 'Stop'
@@ -83,6 +87,33 @@ public sealed class SystemStateBackupService
                 $valueTargets = __VALUE_TARGETS__
                 $keyTargets = __KEY_TARGETS__
                 $aclTargets = __ACL_TARGETS__
+                $resolveInteractiveHkcu = __RESOLVE_INTERACTIVE_HKCU__
+                $interactiveUser = $null
+                $interactiveUserSid = $null
+
+                if ($resolveInteractiveHkcu) {
+                    $interactiveUser = (Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop).UserName
+                    if ([string]::IsNullOrWhiteSpace($interactiveUser)) {
+                        throw 'На целевом компьютере нет вошедшего интерактивного пользователя для снимка HKCU.'
+                    }
+                    $interactiveUserSid = ([System.Security.Principal.NTAccount]$interactiveUser).Translate(
+                        [System.Security.Principal.SecurityIdentifier]).Value
+                    Write-Output "[INFO] HKCU сопоставлен с $interactiveUser ($interactiveUserSid)"
+                }
+
+                function Resolve-WFixProviderPath([string]$Path) {
+                    if ($resolveInteractiveHkcu -and $Path.StartsWith('HKCU:\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                        return "Registry::HKEY_USERS\$interactiveUserSid\$($Path.Substring(6))"
+                    }
+                    return $Path
+                }
+
+                function Resolve-WFixNativePath([string]$Path) {
+                    if ($resolveInteractiveHkcu -and $Path.StartsWith('HKCU\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                        return "HKEY_USERS\$interactiveUserSid\$($Path.Substring(5))"
+                    }
+                    return $Path
+                }
 
                 $backupRoot = Join-Path $env:ProgramData 'W-Fix\Backups'
                 $safeFixerName = '__FIXER_NAME__' -replace '[^\p{L}\p{Nd}._-]', '_'
@@ -92,12 +123,13 @@ public sealed class SystemStateBackupService
 
                 $valueSnapshots = @()
                 foreach ($target in $valueTargets) {
+                    $resolvedPath = Resolve-WFixProviderPath $target.Path
                     $exists = $false
                     $value = $null
                     $kind = $null
 
-                    if (Test-Path -LiteralPath $target.Path) {
-                        $key = Get-Item -LiteralPath $target.Path -ErrorAction Stop
+                    if (Test-Path -LiteralPath $resolvedPath) {
+                        $key = Get-Item -LiteralPath $resolvedPath -ErrorAction Stop
                         $exists = $key.GetValueNames() -contains $target.Name
                         if ($exists) {
                             $value = $key.GetValue(
@@ -109,7 +141,7 @@ public sealed class SystemStateBackupService
                     }
 
                     $valueSnapshots += [pscustomobject]@{
-                        Path = $target.Path
+                        Path = $resolvedPath
                         Name = $target.Name
                         Exists = $exists
                         Value = $value
@@ -120,19 +152,21 @@ public sealed class SystemStateBackupService
                 $keySnapshots = @()
                 $keyIndex = 0
                 foreach ($target in $keyTargets) {
-                    $present = Test-Path -LiteralPath $target.ProviderPath
+                    $resolvedProviderPath = Resolve-WFixProviderPath $target.ProviderPath
+                    $resolvedNativePath = Resolve-WFixNativePath $target.NativePath
+                    $present = Test-Path -LiteralPath $resolvedProviderPath
                     $exportFile = $null
                     if ($present) {
                         $exportFile = "registry_key_$keyIndex.reg"
-                        & reg.exe export $target.NativePath (Join-Path $backupDirectory $exportFile) /y | Out-Null
+                        & reg.exe export $resolvedNativePath (Join-Path $backupDirectory $exportFile) /y | Out-Null
                         if ($LASTEXITCODE -ne 0) {
-                            throw "reg export завершился с кодом $LASTEXITCODE для $($target.NativePath)"
+                            throw "reg export завершился с кодом $LASTEXITCODE для $resolvedNativePath"
                         }
                     }
 
                     $keySnapshots += [pscustomobject]@{
-                        ProviderPath = $target.ProviderPath
-                        NativePath = $target.NativePath
+                        ProviderPath = $resolvedProviderPath
+                        NativePath = $resolvedNativePath
                         Present = $present
                         ExportFile = $exportFile
                     }
@@ -141,10 +175,11 @@ public sealed class SystemStateBackupService
 
                 $aclSnapshots = @()
                 foreach ($target in $aclTargets) {
-                    $present = Test-Path -LiteralPath $target.Path
-                    $sddl = if ($present) { (Get-Acl -LiteralPath $target.Path).Sddl } else { $null }
+                    $resolvedPath = Resolve-WFixProviderPath $target.Path
+                    $present = Test-Path -LiteralPath $resolvedPath
+                    $sddl = if ($present) { (Get-Acl -LiteralPath $resolvedPath).Sddl } else { $null }
                     $aclSnapshots += [pscustomobject]@{
-                        Path = $target.Path
+                        Path = $resolvedPath
                         Present = $present
                         Sddl = $sddl
                     }
@@ -159,6 +194,7 @@ public sealed class SystemStateBackupService
                 [ordered]@{
                     Fixer = '__FIXER_NAME__'
                     Computer = $env:COMPUTERNAME
+                    InteractiveUser = $interactiveUser
                     CreatedAt = (Get-Date).ToString('o')
                     RegistryValueCount = $valueSnapshots.Count
                     RegistryKeyCount = $keySnapshots.Count
@@ -227,8 +263,18 @@ public sealed class SystemStateBackupService
             .Replace("__VALUE_TARGETS__", BuildValueTargets(plan.RegistryValues), StringComparison.Ordinal)
             .Replace("__KEY_TARGETS__", BuildKeyTargets(plan.RegistryKeys), StringComparison.Ordinal)
             .Replace("__ACL_TARGETS__", BuildAclTargets(plan.RegistryAcls), StringComparison.Ordinal)
+            .Replace("__RESOLVE_INTERACTIVE_HKCU__", resolveInteractiveHkcu ? "$true" : "$false", StringComparison.Ordinal)
             .Replace("__FIXER_NAME__", EscapePowerShellLiteral(fixerName), StringComparison.Ordinal);
     }
+
+    private static bool UsesCurrentUserHive(SystemStateBackupPlan plan) =>
+        plan.RegistryValues.Any(target => IsCurrentUserPath(target.Path)) ||
+        plan.RegistryKeys.Any(target => IsCurrentUserPath(target.ProviderPath) || IsCurrentUserPath(target.NativePath)) ||
+        plan.RegistryAcls.Any(target => IsCurrentUserPath(target.Path));
+
+    private static bool IsCurrentUserPath(string path) =>
+        path.StartsWith(@"HKCU:\", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith(@"HKCU\", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<PowerShellExecutionResult> ExecuteAsync(
         string script,
