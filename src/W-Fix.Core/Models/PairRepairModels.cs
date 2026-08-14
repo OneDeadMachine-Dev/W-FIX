@@ -51,6 +51,7 @@ public sealed record PairInvitation
     public DateTimeOffset ExpiresAt { get; init; }
     public string? PrinterName { get; init; }
     public string? ShareName { get; init; }
+    public string? ExpectedClientComputerName { get; init; }
 }
 
 public sealed record PairOfflineBundle
@@ -95,6 +96,7 @@ public sealed record PairEndpointSnapshot
     public string? PrinterName { get; init; }
     public string? PrinterShareName { get; init; }
     public bool PrinterShared { get; init; }
+    public bool PrinterAllowsAuthenticatedUsersPrint { get; init; }
     public string? PrinterDriverName { get; init; }
     public string? PrinterDriverVersion { get; init; }
     public bool PrinterConnectionInstalled { get; init; }
@@ -224,7 +226,8 @@ public enum PairActionOperation
     Execute,
     Verify,
     Rollback,
-    Commit
+    Commit,
+    Abort
 }
 
 public sealed record PairActionRequest(string RequestId, PairActionOperation Operation, PairRepairStep Step);

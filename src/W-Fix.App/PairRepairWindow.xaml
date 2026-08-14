@@ -1,0 +1,213 @@
+<Window x:Class="WFix.App.PairRepairWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.modernwpf.com/2019"
+        xmlns:conv="clr-namespace:WFix.App.Converters"
+        ui:WindowHelper.UseModernWindowStyle="True"
+        Title="W-Fix — Pair Repair Wizard"
+        Width="1240" Height="820" MinWidth="980" MinHeight="650"
+        Background="#0D1117" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolVis"/>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="54"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="34"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,0,0,1" Padding="18,0">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🔗" FontSize="23" Margin="0,0,9,0"/>
+                    <StackPanel>
+                        <TextBlock Text="Pair Repair Wizard" Foreground="#E6EDF3" FontWeight="Bold" FontSize="17"/>
+                        <TextBlock Text="Ремонт общего принтера между двумя ПК" Foreground="#8B949E" FontSize="11"/>
+                    </StackPanel>
+                </StackPanel>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="#0D2137" CornerRadius="5" Padding="10,5">
+                    <TextBlock Text="v3.1 beta · TLS + rollback" Foreground="#58A6FF" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="390"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="1 · Роли и выбранная очередь" Foreground="#E6EDF3" FontWeight="Bold" FontSize="15"/>
+                            <TextBlock Text="Этот ПК" Foreground="#8B949E" Margin="0,12,0,4"/>
+                            <TextBlock Text="{Binding LocalComputerName}" Foreground="#58A6FF" FontWeight="SemiBold"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="🖨 Этот ПК — хост" Command="{Binding UseHostRoleCommand}" Style="{StaticResource FixButton}" Margin="0,0,8,0"/>
+                                <Button Content="💻 Этот ПК — клиент" Command="{Binding UseClientRoleCommand}" Style="{StaticResource FixButton}"/>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding RoleText, StringFormat='Выбрано: {0}'}" Foreground="#2ECC71" Margin="0,7,0,0"/>
+                            <TextBlock Text="Имя второго ПК" Foreground="#8B949E" Margin="0,12,0,4"/>
+                            <TextBox Text="{Binding PeerComputerName, UpdateSourceTrigger=PropertyChanged}" ui:ControlHelper.PlaceholderText="Например: OFFICE-PC02"/>
+                            <TextBlock Text="Локальный принтер на хосте" Foreground="#8B949E" Margin="0,10,0,4"/>
+                            <TextBox Text="{Binding PrinterName, UpdateSourceTrigger=PropertyChanged}" ui:ControlHelper.PlaceholderText="Точное имя Get-Printer"/>
+                            <TextBlock Text="ShareName (можно оставить пустым)" Foreground="#8B949E" Margin="0,10,0,4"/>
+                            <TextBox Text="{Binding ShareName, UpdateSourceTrigger=PropertyChanged}" ui:ControlHelper.PlaceholderText="WFixPrinter"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="Домен: WinRM / Kerberos" Foreground="#E6EDF3" FontWeight="Bold"/>
+                            <TextBlock Text="Один администратор управляет двумя доменными ПК. В поле «Имя второго ПК» выше укажите Client." TextWrapping="Wrap" Foreground="#8B949E" Margin="0,5,0,8"/>
+                            <TextBox Text="{Binding DomainHostComputerName, UpdateSourceTrigger=PropertyChanged}" ui:ControlHelper.PlaceholderText="Имя доменного Host"/>
+                            <Button Content="Проверить Host ↔ Client и построить план" Command="{Binding DiagnoseDomainPairCommand}" Style="{StaticResource FixButton}" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="2 · Безопасное соединение" Foreground="#E6EDF3" FontWeight="Bold" FontSize="15"/>
+                            <TextBlock Text="Хост" Foreground="#8B949E" Margin="0,10,0,4"/>
+                            <WrapPanel>
+                                <Button Content="Создать приглашение" Command="{Binding StartHostCommand}" Style="{StaticResource FixButton}" Margin="0,0,6,0"/>
+                                <Button Content="Сохранить .wfixpair" Click="ExportInvitation_Click" Style="{StaticResource FixButton}"/>
+                            </WrapPanel>
+                            <Button Content="Ждать подключение клиента" Command="{Binding WaitForPartnerCommand}" Style="{StaticResource FixButton}" Margin="0,6,0,0"/>
+                            <TextBlock Text="Клиент" Foreground="#8B949E" Margin="0,10,0,4"/>
+                            <Button Content="Открыть приглашение и подключиться" Click="ImportInvitation_Click" Style="{StaticResource FixButton}"/>
+                            <Border Background="#0D2137" BorderBrush="#2D7FF9" BorderThickness="1" CornerRadius="7" Margin="0,12,0,6" Padding="10">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="Сверьте код на обоих ПК" Foreground="#8B949E" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ConfirmationCode}" Foreground="#58A6FF" FontFamily="Consolas" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Button Content="Код совпадает — разрешить изменения" Command="{Binding ApproveCommand}" Background="#173A2A" Foreground="#3FB950" BorderBrush="#238636" Padding="12,8"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="Offline fallback" Foreground="#E6EDF3" FontWeight="Bold"/>
+                            <TextBlock Text="Если порт заблокирован: обмен подписанными снимками. Общего автоматического rollback между ПК нет." TextWrapping="Wrap" Foreground="#D29922" Margin="0,5,0,8"/>
+                            <WrapPanel>
+                                <Button Content="Экспорт снимка" Click="ExportOffline_Click" Style="{StaticResource FixButton}" Margin="0,0,6,0"/>
+                                <Button Content="Импорт снимка" Click="ImportOffline_Click" Style="{StaticResource FixButton}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardPanel}">
+                        <StackPanel>
+                            <TextBlock Text="Точечная SMB-учётная запись" Foreground="#E6EDF3" FontWeight="Bold"/>
+                            <TextBlock Text="Только на клиенте и только для выбранного хоста. Пароль хранит Windows Credential Manager." TextWrapping="Wrap" Foreground="#8B949E" Margin="0,5,0,8"/>
+                            <TextBox Text="{Binding NetworkCredentialUser}" ui:ControlHelper.PlaceholderText="HOST\User"/>
+                            <PasswordBox x:Name="NetworkPassword" Margin="0,6,0,0"/>
+                            <Button Content="Сохранить для хоста" Click="SaveNetworkCredential_Click" Style="{StaticResource FixButton}" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Grid Grid.Column="1" Margin="5,0,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="3 · Причина и общий план" Foreground="#E6EDF3" FontWeight="Bold" FontSize="15"/>
+                                <TextBlock Text="План появляется на клиенте после двойного подтверждения либо после offline-импорта." Foreground="#8B949E" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox Content="Экспертные действия" IsChecked="{Binding IncludeExpertActions}" Foreground="#D29922" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <Button Content="Пересобрать план" Command="{Binding RebuildPlanCommand}" Style="{StaticResource FixButton}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="Найденные причины" Foreground="#E6EDF3" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <ListBox ItemsSource="{Binding Findings}" MaxHeight="210" Background="Transparent" BorderThickness="0">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#161B22" CornerRadius="6" Padding="8" Margin="0,2">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}" Foreground="#D29922" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Description}" Foreground="#8B949E" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="Действия" Foreground="#E6EDF3" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <ListBox ItemsSource="{Binding Steps}" MaxHeight="210" Background="Transparent" BorderThickness="0">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#161B22" CornerRadius="6" Padding="8" Margin="0,2">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}" Foreground="#58A6FF" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Endpoint, StringFormat='Сторона: {0}'}" Foreground="#8B949E" FontSize="11"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Border Grid.Row="2" Style="{StaticResource CardPanel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="4 · Выполнение, rollback и физическая проверка" Foreground="#E6EDF3" FontWeight="Bold" FontSize="15"/>
+                                <ProgressBar IsIndeterminate="True" Height="3" VerticalAlignment="Bottom" Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Activity}" Background="#0D1117" BorderThickness="0" Margin="0,10,0,8" FontFamily="Consolas" Foreground="#C9D1D9">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="5,2"/></DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <WrapPanel Grid.Row="2">
+                                <Button Content="▶ Выполнить общий план" Command="{Binding ExecutePlanCommand}" Background="#173A2A" Foreground="#3FB950" BorderBrush="#238636" Padding="14,9" Margin="0,0,8,0"/>
+                                <Button Content="🧾 Печать тестовой страницы" Command="{Binding PrintTestPageCommand}" Style="{StaticResource FixButton}" Margin="0,0,8,0"/>
+                                <Button Content="Отмена" Command="{Binding CancelCommand}" Background="#3A1A1A" Foreground="#FF7B72" BorderBrush="#DA3633" Padding="12,8"/>
+                            </WrapPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,1,0,0" Padding="12,0">
+            <Grid>
+                <TextBlock Text="{Binding StatusText}" Foreground="#8B949E" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="SMB1 запрещён · Public profile блокирует listener · пароли не журналируются" Foreground="#484F58" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

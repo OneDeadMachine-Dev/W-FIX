@@ -13,7 +13,7 @@ body:
     id: version
     attributes:
       label: W-Fix version / Версия W-Fix
-      placeholder: v3.0.0-beta.1
+      placeholder: v3.1.0-beta.1
     validations:
       required: true
   - type: dropdown
@@ -35,6 +35,8 @@ body:
         - Local repair / Локальный ремонт
         - Active Directory domain
         - Workgroup / Одноранговая сеть
+        - Pair Repair live / Парный ремонт по сети
+        - Pair Repair offline / Парный ремонт через файлы
     validations:
       required: true
   - type: textarea

@@ -10,6 +10,7 @@ W-Fix не содержит телеметрии, рекламы и автома
 - Альтернативные учётные данные сохраняются только после явного согласия в Windows Credential Manager. Пароли не записываются в конфигурацию, аргументы процессов, логи и отчёты.
 - При диагностике W-Fix может загрузить декларативный каталог известных проблем с официального GitHub Release проекта. Загруженный каталог проверяется цифровой подписью и не может содержать исполняемый код.
 - W-Fix не передаёт сведения третьим лицам, если пользователь сам не экспортировал и не отправил отчёт или support bundle.
+- Pair Repair обменивается данными только между двумя явно выбранными ПК. Приглашение и offline-снимок не содержат паролей; live-listener и временное правило Firewall удаляются после сессии.
 
 Сообщить о проблеме конфиденциальности можно через [Private vulnerability reporting](https://github.com/OneDeadMachine-Dev/W-FIX/security/advisories/new).
 
@@ -23,5 +24,6 @@ W-Fix contains no telemetry, advertising, or automatic report uploads. It operat
 - Alternate credentials are saved only with explicit consent in Windows Credential Manager. Passwords are never written to configuration, process arguments, logs, or reports.
 - During diagnostics W-Fix may download a declarative known-issues catalog from the project's official GitHub Release. The catalog is signature-verified and cannot contain executable code.
 - W-Fix sends no information to third parties unless the user explicitly exports and shares a report or support bundle.
+- Pair Repair exchanges data only between two explicitly selected PCs. Invitations and offline snapshots contain no passwords; the live listener and temporary Firewall rule are removed after the session.
 
 Report a privacy concern through [Private vulnerability reporting](https://github.com/OneDeadMachine-Dev/W-FIX/security/advisories/new).

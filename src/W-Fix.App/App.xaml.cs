@@ -8,6 +8,7 @@ using WFix.Core.Abstractions;
 using WFix.Core.Catalog;
 using WFix.Core.Diagnostics;
 using WFix.Core.Infrastructure;
+using WFix.Core.Pairing;
 using WFix.Core.Remote;
 using WFix.Core.Repair;
 using WFix.Core.Reporting;
@@ -60,6 +61,9 @@ public partial class App : Application
     public RemoteCenterWindow CreateRemoteCenterWindow() =>
         Services.GetRequiredService<RemoteCenterWindow>();
 
+    public PairRepairWindow CreatePairRepairWindow() =>
+        Services.GetRequiredService<PairRepairWindow>();
+
     protected override void OnExit(ExitEventArgs e)
     {
         Log.Information("W-Fix завершён");
@@ -76,6 +80,7 @@ public partial class App : Application
         services.AddSingleton<ActiveDirectoryService>();
         services.AddSingleton<FixerRegistry>();
         services.AddSingleton<SystemStateBackupService>();
+        services.AddSingleton<InteractiveUserPowerShellService>();
 
         services.AddSingleton<ICredentialStore, WindowsCredentialStore>();
         services.AddSingleton<IRemoteSessionFactory, PowerShellRemoteSessionFactory>();
@@ -96,11 +101,31 @@ public partial class App : Application
         services.AddSingleton<IDiagnosticService, DiagnosticService>();
         services.AddSingleton<IRepairExecutor, RepairExecutor>();
 
+        services.AddSingleton<IPairInvitationValidator, PairInvitationValidator>();
+        services.AddSingleton<IPairSessionTransport, TlsPairSessionTransport>();
+        services.AddSingleton<IPairFirewallLeaseService, WindowsPairFirewallLeaseService>();
+        services.AddSingleton<IPairFileService, PairFileService>();
+        services.AddSingleton<IPairInventoryService, PairInventoryService>();
+        services.AddSingleton<IPairDiagnosticRule, PairDiscoveryDiagnosticRule>();
+        services.AddSingleton<IPairDiagnosticRule, PairSmbDiagnosticRule>();
+        services.AddSingleton<IPairDiagnosticRule, PairRpcDiagnosticRule>();
+        services.AddSingleton<IPairDiagnosticRule, PairPrinterShareDiagnosticRule>();
+        services.AddSingleton<IPairDiagnosticRule, PairRpcCompatibilityDiagnosticRule>();
+        services.AddSingleton<IPairDiagnosticService, PairDiagnosticService>();
+        services.AddSingleton<IPairRepairPlanner, PairRepairPlanner>();
+        services.AddSingleton<IPairRepairActionRegistry, PairRepairActionRegistry>();
+        services.AddSingleton<IPairActionDispatcher, RegistryPairActionDispatcher>();
+        services.AddTransient<IPairAgentCommandLoop, PairAgentCommandLoop>();
+        services.AddSingleton<IPairRunReportService, PairRunReportService>();
+        services.AddSingleton<INetworkCredentialProvisioner, WindowsNetworkCredentialProvisioner>();
+
         services.AddSingleton<IUserPromptService, UserPromptService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<RemoteCenterViewModel>();
+        services.AddTransient<PairRepairViewModel>();
         services.AddSingleton<MainWindow>();
         services.AddTransient<RemoteCenterWindow>();
+        services.AddTransient<PairRepairWindow>();
 
         return services.BuildServiceProvider(new ServiceProviderOptions
         {

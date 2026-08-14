@@ -18,6 +18,13 @@ public partial class MainWindow : Window
         window.Show();
     }
 
+    private void OpenPairRepair_Click(object sender, RoutedEventArgs e)
+    {
+        var window = ((App)Application.Current).CreatePairRepairWindow();
+        window.Owner = this;
+        window.Show();
+    }
+
     private void ClearLog_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is ViewModels.MainWindowViewModel vm)

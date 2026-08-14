@@ -14,6 +14,7 @@ public sealed class PairRepairPlanner : IPairRepairPlanner
             ["pair.spooler.start"] = new("Запустить диспетчер печати хоста", RepairRisk.Reversible, false, _ => [PairEndpointRole.Host]),
             ["pair.smb.clear-conflict"] = new("Закрыть конфликтующий SMB-сеанс", RepairRisk.Irreversible, false, _ => [PairEndpointRole.Client]),
             ["pair.printer.share"] = new("Опубликовать очередь хоста", RepairRisk.Reversible, false, _ => [PairEndpointRole.Host]),
+            ["pair.printer.grant-print"] = new("Восстановить право Print общей очереди", RepairRisk.Reversible, false, _ => [PairEndpointRole.Host]),
             ["pair.printer.connect"] = new("Подключить общую очередь", RepairRisk.Reversible, false, _ => [PairEndpointRole.Client]),
             ["pair.rpc.named-pipes"] = new("Включить совместимый RPC over Named Pipes", RepairRisk.Disruptive, true, _ => [PairEndpointRole.Host, PairEndpointRole.Client])
         };

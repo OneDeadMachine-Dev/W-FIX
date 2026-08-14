@@ -18,5 +18,7 @@ Include the W-Fix version, Windows version, expected and actual behavior, and mi
 
 - W-Fix требует административных прав, потому что изменяет службы, реестр, политики печати и драйверы.
 - Remote Center выполняет действия только на явно выбранных целях.
+- Pair Repair использует TLS 1.2+, временный ECDSA-ключ, pinning, одинаковый код и подтверждение на обоих ПК. По каналу разрешены только типизированные DTO и встроенные `pair.*` действия.
+- Pair listener не открывается на Public-профиле; SMB1 не поддерживается.
 - Загружаемый known-issues catalog декларативен, подписан ECDSA и ссылается только на встроенные действия.
 - Private keys, GitHub tokens and SignPath tokens must never be committed to the repository.

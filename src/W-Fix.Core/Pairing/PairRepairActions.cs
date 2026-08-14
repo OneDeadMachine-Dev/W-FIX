@@ -1,6 +1,7 @@
 using System.Text;
 using WFix.Core.Abstractions;
 using WFix.Core.Models;
+using WFix.Core.Services;
 
 namespace WFix.Core.Pairing;
 
@@ -9,21 +10,24 @@ public sealed class PairRepairActionRegistry : IPairRepairActionRegistry
     private readonly IReadOnlyList<IPairRepairAction> _actions;
     private readonly IReadOnlyDictionary<string, IPairRepairAction> _byId;
 
-    public PairRepairActionRegistry(IRemoteSessionFactory sessionFactory)
+    public PairRepairActionRegistry(
+        IRemoteSessionFactory sessionFactory,
+        InteractiveUserPowerShellService interactiveUserPowerShell)
     {
         _actions =
         [
-            new BuiltInPairRepairAction("pair.discovery.services", "Запустить службы обнаружения", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.firewall.discovery", "Разрешить сетевое обнаружение", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.firewall.file-print", "Разрешить SMB/RPC печати", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.spooler.start", "Запустить диспетчер печати", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.smb.clear-conflict", "Закрыть конфликтующий SMB-сеанс", RepairRisk.Irreversible, false, false, sessionFactory),
-            new BuiltInPairRepairAction("pair.printer.share", "Опубликовать очередь", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.printer.connect", "Подключить общую очередь", RepairRisk.Reversible, false, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.rpc.named-pipes", "Включить RPC over Named Pipes", RepairRisk.Disruptive, true, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.rpc.disable-privacy", "Ослабить RPC privacy", RepairRisk.Disruptive, true, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.smb.insecure-guest", "Разрешить insecure guest", RepairRisk.Disruptive, true, true, sessionFactory),
-            new BuiltInPairRepairAction("pair.smb.disable-signing", "Отключить обязательную SMB-подпись", RepairRisk.Disruptive, true, true, sessionFactory)
+            new BuiltInPairRepairAction("pair.discovery.services", "Запустить службы обнаружения", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.firewall.discovery", "Разрешить сетевое обнаружение", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.firewall.file-print", "Разрешить SMB/RPC печати", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.spooler.start", "Запустить диспетчер печати", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.smb.clear-conflict", "Закрыть конфликтующий SMB-сеанс", RepairRisk.Irreversible, false, false, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.printer.share", "Опубликовать очередь", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.printer.grant-print", "Восстановить право Print", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.printer.connect", "Подключить общую очередь", RepairRisk.Reversible, false, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.rpc.named-pipes", "Включить RPC over Named Pipes", RepairRisk.Disruptive, true, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.rpc.disable-privacy", "Ослабить RPC privacy", RepairRisk.Disruptive, true, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.smb.insecure-guest", "Разрешить insecure guest", RepairRisk.Disruptive, true, true, sessionFactory, interactiveUserPowerShell),
+            new BuiltInPairRepairAction("pair.smb.disable-signing", "Отключить обязательную SMB-подпись", RepairRisk.Disruptive, true, true, sessionFactory, interactiveUserPowerShell)
         ];
         _byId = _actions.ToDictionary(action => action.Id, StringComparer.Ordinal);
     }
@@ -57,7 +61,8 @@ internal sealed class BuiltInPairRepairAction(
     RepairRisk risk,
     bool expertOnly,
     bool isIdempotent,
-    IRemoteSessionFactory sessionFactory) : IPairRepairAction
+    IRemoteSessionFactory sessionFactory,
+    InteractiveUserPowerShellService interactiveUserPowerShell) : IPairRepairAction
 {
     public string Id { get; } = id;
     public string Name { get; } = name;
@@ -161,6 +166,12 @@ internal sealed class BuiltInPairRepairAction(
                 $printer=Get-Printer -Name $name
                 [ordered]@{Shared=[bool]$printer.Shared;ShareName=[string]$printer.ShareName} | ConvertTo-Json -Compress
                 """,
+            "pair.printer.grant-print" => $$"""
+                $ErrorActionPreference='Stop'
+                $name=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{Encode(Required(context, "printerName"))}}'))
+                $printer=Get-Printer -Name $name -Full
+                [ordered]@{PermissionSDDL=[string]$printer.PermissionSDDL} | ConvertTo-Json -Compress
+                """,
             "pair.printer.connect" => $$"""
                 $hostName=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{Encode(Required(context, "hostName"))}}'))
                 $share=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{Encode(Required(context, "shareName"))}}'))
@@ -217,6 +228,21 @@ internal sealed class BuiltInPairRepairAction(
                 Set-Printer -Name $name -Shared $true -ShareName $share
                 'OK'
                 """,
+            "pair.printer.grant-print" => $$"""
+                $ErrorActionPreference='Stop'
+                $name=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{Encode(Required(context, "printerName"))}}'))
+                $printer=Get-Printer -Name $name -Full
+                $descriptor=[Security.AccessControl.RawSecurityDescriptor]::new([string]$printer.PermissionSDDL)
+                $sid=[Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::AuthenticatedUserSid,$null)
+                $exists=@($descriptor.DiscretionaryAcl | Where-Object { $_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and $_.SecurityIdentifier -eq $sid -and ($_.AccessMask -band 8) -ne 0 }).Count -gt 0
+                if(-not $exists){
+                    $ace=[Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::None,[Security.AccessControl.AceQualifier]::AccessAllowed,8,$sid,$false,$null)
+                    $descriptor.DiscretionaryAcl.InsertAce($descriptor.DiscretionaryAcl.Count,$ace)
+                    $newSddl=$descriptor.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
+                    Set-Printer -Name $name -PermissionSDDL $newSddl
+                }
+                'OK'
+                """,
             "pair.printer.connect" => $$"""
                 $ErrorActionPreference='Stop'
                 $hostName=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{Encode(Required(context, "hostName"))}}'))
@@ -250,6 +276,7 @@ internal sealed class BuiltInPairRepairAction(
             "pair.spooler.start" => "[bool]((Get-Service Spooler).Status -eq 'Running')",
             "pair.smb.clear-conflict" => "$h=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedHost + "')); [bool](@(Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object RemotePath -Like ('\\\\'+$h+'\\*')).Count -eq 0)",
             "pair.printer.share" => "$n=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedPrinter + "'));$s=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedShare + "'));$p=Get-Printer -Name $n;[bool]($p.Shared -and $p.ShareName -eq $s)",
+            "pair.printer.grant-print" => "$n=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedPrinter + "'));$p=Get-Printer -Name $n -Full;$d=[Security.AccessControl.RawSecurityDescriptor]::new([string]$p.PermissionSDDL);$sid=[Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::AuthenticatedUserSid,$null);[bool](@($d.DiscretionaryAcl|Where-Object{$_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and $_.SecurityIdentifier -eq $sid -and ($_.AccessMask -band 8) -ne 0}).Count -gt 0)",
             "pair.printer.connect" => "$h=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedHost + "'));$s=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedShare + "'));[bool]($null -ne (Get-Printer -Name ('\\\\'+$h+'\\'+$s) -ErrorAction SilentlyContinue))",
             "pair.rpc.named-pipes" => context.Step.Endpoint == PairEndpointRole.Host
                 ? @"[bool](((Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC').RpcProtocols -band 2) -ne 0)"
@@ -272,7 +299,8 @@ internal sealed class BuiltInPairRepairAction(
             "pair.discovery.services" => load + "foreach($n in @('fdPHost','FDResPub')){$mode=$state.($n+'StartMode');$startup=if($mode -eq 'Auto'){'Automatic'}elseif($mode -eq 'Disabled'){'Disabled'}else{'Manual'};Set-Service $n -StartupType $startup;if($state.($n+'Status') -eq 'Running'){Start-Service $n}else{Stop-Service $n -Force -ErrorAction SilentlyContinue}};'OK'",
             "pair.firewall.discovery" or "pair.firewall.file-print" => load + "$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + Encode(rulePrefix) + "'));$existing=@($state.Existing);Get-NetFirewallRule -ErrorAction SilentlyContinue|Where-Object{$_.DisplayName -like ($p+'*') -and $_.DisplayName -notin $existing}|Remove-NetFirewallRule;'OK'",
             "pair.spooler.start" => load + "$startup=if($state.StartMode -eq 'Auto'){'Automatic'}elseif($state.StartMode -eq 'Disabled'){'Disabled'}else{'Manual'};Set-Service Spooler -StartupType $startup;if($state.Status -eq 'Running'){Start-Service Spooler}else{Stop-Service Spooler -Force};'OK'",
-            "pair.printer.share" => load + "$n=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + Encode(Required(context, "printerName")) + "'));Set-Printer -Name $n -Shared ([bool]$state.Shared) -ShareName ([string]$state.ShareName);'OK'",
+            "pair.printer.share" => load + "$n=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + Encode(Required(context, "printerName")) + "'));if([bool]$state.Shared){Set-Printer -Name $n -Shared $true -ShareName ([string]$state.ShareName)}else{Set-Printer -Name $n -Shared $false};'OK'",
+            "pair.printer.grant-print" => load + "$n=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + Encode(Required(context, "printerName")) + "'));Set-Printer -Name $n -PermissionSDDL ([string]$state.PermissionSDDL);'OK'",
             "pair.printer.connect" => load + "if(-not [bool]$state.Existed){Remove-Printer -Name ([string]$state.Connection) -ErrorAction SilentlyContinue};'OK'",
             "pair.rpc.named-pipes" => load + RestoreRegistryScript("HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\RPC", context.Step.Endpoint == PairEndpointRole.Host ? "RpcProtocols" : "RpcUseNamedPipeProtocol"),
             "pair.rpc.disable-privacy" => load + RestoreRegistryScript("HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print", "RpcAuthnLevelPrivacyEnabled"),
@@ -306,6 +334,11 @@ internal sealed class BuiltInPairRepairAction(
 
     private async Task<RemoteCommandResult> RunAsync(TargetDescriptor target, string script, TimeSpan timeout, CancellationToken cancellationToken)
     {
+        if (Id == "pair.printer.connect" && target.Source != TargetSource.Local)
+        {
+            var result = await interactiveUserPowerShell.RunRemoteAsync(target.ConnectionName, script, cancellationToken, timeout);
+            return new RemoteCommandResult(result.Success, result.Output, result.Error, result.TimedOut);
+        }
         await using var session = await sessionFactory.CreateAsync(target, cancellationToken);
         return await session.ExecutePowerShellAsync(script, cancellationToken, timeout);
     }

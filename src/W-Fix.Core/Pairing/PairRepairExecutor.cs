@@ -74,7 +74,7 @@ public sealed class PairRepairExecutor(
         catch (OperationCanceledException)
         {
             var rolledBack = await RollbackAsync(completed, results, warnings);
-            var cancelled = Build(rolledBack ? PairRunStatus.RolledBack : PairRunStatus.RecoveryRequired);
+            var cancelled = Build(rolledBack ? PairRunStatus.Cancelled : PairRunStatus.RecoveryRequired);
             var persisted = await PersistAsync(cancelled, CancellationToken.None);
             if (rolledBack) DeleteJournal(journalPath);
             progress?.Report(persisted);
@@ -135,6 +135,15 @@ public sealed class PairRepairExecutor(
                 allSucceeded = false;
                 warnings.Add($"Rollback '{item.Context.Step.Title}': {ex.Message}");
             }
+        }
+        try
+        {
+            await dispatcher.CompleteAsync(false, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            allSucceeded = false;
+            warnings.Add($"Pair abort: {ex.Message}");
         }
         return allSucceeded;
     }

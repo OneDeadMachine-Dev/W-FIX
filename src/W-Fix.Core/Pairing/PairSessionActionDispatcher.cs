@@ -59,18 +59,18 @@ public sealed class PairSessionActionDispatcher(
 
     public async Task CompleteAsync(bool commit, CancellationToken cancellationToken = default)
     {
-        if (!commit) return;
         var step = new PairRepairStep
         {
-            Id = "pair-session-commit",
-            ActionId = "pair.session.commit",
+            Id = commit ? "pair-session-commit" : "pair-session-abort",
+            ActionId = commit ? "pair.session.commit" : "pair.session.abort",
             Endpoint = remoteEndpoint,
-            Title = "Commit PairRun"
+            Title = commit ? "Commit PairRun" : "Abort PairRun"
         };
-        var response = await InvokeRemoteAsync(Guid.NewGuid().ToString("N"), PairActionOperation.Commit, step, cancellationToken);
+        var operation = commit ? PairActionOperation.Commit : PairActionOperation.Abort;
+        var response = await InvokeRemoteAsync(Guid.NewGuid().ToString("N"), operation, step, cancellationToken);
         if (!response.Result.Success) throw new InvalidOperationException(response.Result.Summary);
         _requestIds.Clear();
-        await localDispatcher.CompleteAsync(true, cancellationToken);
+        await localDispatcher.CompleteAsync(commit, cancellationToken);
     }
 
     private async Task<PairActionResponse> InvokeRemoteAsync(
@@ -79,8 +79,21 @@ public sealed class PairSessionActionDispatcher(
         PairRepairStep step,
         CancellationToken cancellationToken)
     {
-        await session.SendAsync(PairMessageKind.ActionRequest, new PairActionRequest(requestId, operation, step), cancellationToken);
-        var response = await session.ReceiveAsync<PairActionResponse>(PairMessageKind.ActionResult, cancellationToken);
+        var timeout = step.Timeout >= TimeSpan.FromSeconds(1) && step.Timeout <= TimeSpan.FromMinutes(10)
+            ? step.Timeout
+            : TimeSpan.FromSeconds(45);
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        PairActionResponse response;
+        try
+        {
+            await session.SendAsync(PairMessageKind.ActionRequest, new PairActionRequest(requestId, operation, step), linked.Token);
+            response = await session.ReceiveAsync<PairActionResponse>(PairMessageKind.ActionResult, linked.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Pair action '{step.ActionId}' превысил таймаут {timeout}.");
+        }
         if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal))
             throw new InvalidDataException("Ответ pairing-агента не соответствует запросу.");
         return response;
@@ -113,12 +126,35 @@ public sealed class PairAgentCommandLoop(IPairActionDispatcher localDispatcher) 
                 PairActionResult result;
                 try
                 {
+                    if (request.Step.Endpoint != PairEndpointRole.Host)
+                        throw new InvalidDataException("Pairing-агент хоста принимает только host-side действия.");
                     if (request.Operation == PairActionOperation.Commit)
                     {
                         prepared.Clear();
                         committed = true;
                         result = new PairActionResult { Success = true, Verified = true, Summary = "PairRun committed." };
                         await session.SendAsync(PairMessageKind.ActionResult, new PairActionResponse(request.RequestId, result), cancellationToken);
+                        return;
+                    }
+                    if (request.Operation == PairActionOperation.Abort)
+                    {
+                        var rollbackFailures = new List<string>();
+                        foreach (var item in prepared.Values.Reverse())
+                        {
+                            var rollback = await localDispatcher.RollbackAsync(item.Context, item.Checkpoint, CancellationToken.None);
+                            if (!rollback.Success) rollbackFailures.Add(rollback.Summary);
+                        }
+                        if (rollbackFailures.Count == 0) prepared.Clear();
+                        result = new PairActionResult
+                        {
+                            Success = rollbackFailures.Count == 0,
+                            Verified = rollbackFailures.Count == 0,
+                            Summary = rollbackFailures.Count == 0
+                                ? "Host-side PairRun aborted and rolled back."
+                                : "Host-side rollback incomplete: " + string.Join("; ", rollbackFailures)
+                        };
+                        await session.SendAsync(PairMessageKind.ActionResult, new PairActionResponse(request.RequestId, result), cancellationToken);
+                        committed = rollbackFailures.Count == 0;
                         return;
                     }
                     var context = new PairActionContext(TargetDescriptor.Local(), request.Step, runDirectory);

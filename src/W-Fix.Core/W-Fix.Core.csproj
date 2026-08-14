@@ -8,7 +8,7 @@
     <PlatformTarget>x64</PlatformTarget>
 
     <!-- Metadata -->
-    <Version>3.0.0-beta.1</Version>
+    <Version>3.1.0-beta.1</Version>
     <Authors>OneDeadMachine</Authors>
     <Company>OneDeadMachine</Company>
     <Product>W-Fix Core</Product>

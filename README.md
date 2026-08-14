@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Release](https://img.shields.io/badge/version-3.0.0--beta.1-blue)](https://github.com/OneDeadMachine-Dev/W-FIX/releases)
+[![Release](https://img.shields.io/badge/version-3.1.0--beta.1-blue)](https://github.com/OneDeadMachine-Dev/W-FIX/releases)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 [![Author](https://img.shields.io/badge/author-OneDeadMachine-red)](https://github.com/OneDeadMachine)
 
@@ -45,6 +45,7 @@
 
 ### Плюс:
 - 🌐 **Remote Repair Center v3** — несколько доменных ПК, preflight, инвентаризация, автоматический план, проверка и изолированный rollback
+- 🔗 **Pair Repair Wizard v3.1** — ремонт общего принтера между двумя ПК: TLS pairing, общий диагноз, двусторонний rollback и offline fallback
 - 🧠 **Диагностические правила** — вывод по наблюдаемым фактам, уверенность и официальный источник известной проблемы
 - 🔐 **Credential Manager** — альтернативная доменная учётная запись без пароля в конфигурации, CLI или логах
 - 📊 **Отчёты** — JSON/HTML для каждого запуска и обезличенный ZIP support bundle
@@ -69,6 +70,8 @@
 2. Выполни **Preflight** — ping носит справочный характер, рабочее подключение определяется по WinRM.
 3. Запусти **Диагностику**, проверь факты и сформированный план.
 4. Подтверди пакетный ремонт. Сбой одной машины не останавливает остальные; обратимые шаги неуспешной цели откатываются.
+
+Если общий принтер подключён к другому ПК, открой **Pair Repair** на обеих машинах. Хост создаёт одноразовый `.wfixpair`, оба пользователя сверяют код, а клиент формирует и выполняет общий план. Подробная инструкция: [Pair Repair на русском](docs/pair-repair.md) / [English guide](docs/pair-repair.en.md).
 
 > ⚠️ Права администратора обязательны — фиксеры изменяют реестр и службы Windows.
 
@@ -111,6 +114,7 @@ W-Fix/
 │   │   ├── Remote/                # WinRM preflight и инвентаризация
 │   │   ├── Diagnostics/           # Evidence-based правила
 │   │   ├── Repair/                # Планировщик, legacy-адаптер и batch executor
+│   │   ├── Pairing/               # TLS pairing, SMB/RPC diagnostics и двухузловая saga
 │   │   ├── Catalog/               # Подписанный каталог Windows known issues
 │   │   ├── Fixers/               # 12 фиксеров (FixerBase → IFixer)
 │   │   ├── Services/
@@ -123,6 +127,7 @@ W-Fix/
 │   └── W-Fix.App/                # WPF UI (MVVM + CommunityToolkit)
 │       ├── ViewModels/
 │       ├── RemoteCenterWindow.xaml
+│       ├── PairRepairWindow.xaml
 │       ├── Views/
 │       └── Assets/icon.ico
 └── publish/W-Fix.exe             # Готовый портативный файл

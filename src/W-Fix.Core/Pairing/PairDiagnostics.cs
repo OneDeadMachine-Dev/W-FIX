@@ -161,6 +161,20 @@ public sealed class PairPrinterShareDiagnosticRule : IPairDiagnosticRule
                 RecommendedActionIds = ["pair.printer.share"]
             });
         }
+        if (!host.PrinterAllowsAuthenticatedUsersPrint)
+        {
+            findings.Add(new PairDiagnosticFinding
+            {
+                RuleId = "pair.printer.acl",
+                Title = "У общей очереди отсутствует право Print",
+                Description = "W-Fix добавит Authenticated Users только право печати, сохранив исходный PermissionSDDL для rollback.",
+                Severity = FindingSeverity.Error,
+                Confidence = 0.92,
+                AffectedEndpoints = [PairEndpointRole.Host],
+                Evidence = ["Printer ACL: Print for Everyone/Authenticated Users=False"],
+                RecommendedActionIds = ["pair.printer.grant-print"]
+            });
+        }
         if (!client.PrinterConnectionInstalled)
         {
             findings.Add(new PairDiagnosticFinding

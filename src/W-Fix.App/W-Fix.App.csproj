@@ -15,7 +15,7 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
 
     <!-- Metadata -->
-    <Version>3.0.0-beta.1</Version>
+    <Version>3.1.0-beta.1</Version>
     <Authors>OneDeadMachine</Authors>
     <Company>OneDeadMachine</Company>
     <Product>W-Fix — Printer Troubleshooter</Product>

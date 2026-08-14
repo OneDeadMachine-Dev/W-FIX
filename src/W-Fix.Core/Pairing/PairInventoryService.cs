@@ -56,6 +56,7 @@ public sealed class PairInventoryService(IRemoteSessionFactory sessionFactory) :
             PrinterName = dto.PrinterName,
             PrinterShareName = dto.PrinterShareName,
             PrinterShared = dto.PrinterShared,
+            PrinterAllowsAuthenticatedUsersPrint = dto.PrinterAllowsAuthenticatedUsersPrint,
             PrinterDriverName = dto.PrinterDriverName,
             PrinterDriverVersion = dto.PrinterDriverVersion,
             PrinterConnectionInstalled = dto.PrinterConnectionInstalled,
@@ -107,15 +108,29 @@ public sealed class PairInventoryService(IRemoteSessionFactory sessionFactory) :
             $pointAndPrint = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint' -Name RestrictDriverInstallationToAdministrators -ErrorAction SilentlyContinue
             $printer = $null
             if ($role -eq 'Host') {
-                $printer = if ($requestedPrinter) { Get-Printer -Name $requestedPrinter -ErrorAction SilentlyContinue } else { Get-Printer -ErrorAction SilentlyContinue | Where-Object Shared | Select-Object -First 1 }
+                $printer = if ($requestedPrinter) { Get-Printer -Name $requestedPrinter -Full -ErrorAction SilentlyContinue } else { Get-Printer -Full -ErrorAction SilentlyContinue | Where-Object Shared | Select-Object -First 1 }
             } elseif ($requestedShare) {
                 $connectionName = '\\' + $peerName + '\' + $requestedShare
                 $printer = Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $connectionName -or $_.ComputerName -eq $peerName -and $_.ShareName -eq $requestedShare } | Select-Object -First 1
             }
             $driverVersion = $null
+            $printerAllowsPrint = $false
             if ($null -ne $printer -and $printer.DriverName) {
                 $driver = Get-CimInstance Win32_PrinterDriver -ErrorAction SilentlyContinue | Where-Object Name -like ($printer.DriverName + '*') | Select-Object -First 1
                 $driverVersion = $driver.Version
+            }
+            if ($null -ne $printer -and $printer.PermissionSDDL) {
+                try {
+                    $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new([string]$printer.PermissionSDDL)
+                    $allowedSids = @(
+                        [Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::WorldSid, $null).Value,
+                        [Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::AuthenticatedUserSid, $null).Value
+                    )
+                    $printerAllowsPrint = @($descriptor.DiscretionaryAcl | Where-Object {
+                        $_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and
+                        $allowedSids -contains $_.SecurityIdentifier.Value -and ($_.AccessMask -band 8) -ne 0
+                    }).Count -gt 0
+                } catch {}
             }
             $events = @()
             foreach ($log in @('Microsoft-Windows-PrintService/Admin','Microsoft-Windows-SMBClient/Connectivity')) {
@@ -151,6 +166,7 @@ public sealed class PairInventoryService(IRemoteSessionFactory sessionFactory) :
                 PrinterName = $printer.Name
                 PrinterShareName = $printer.ShareName
                 PrinterShared = [bool]$printer.Shared
+                PrinterAllowsAuthenticatedUsersPrint = $printerAllowsPrint
                 PrinterDriverName = $printer.DriverName
                 PrinterDriverVersion = [string]$driverVersion
                 PrinterConnectionInstalled = ($role -eq 'Client') -and ($null -ne $printer)
@@ -187,6 +203,7 @@ public sealed class PairInventoryService(IRemoteSessionFactory sessionFactory) :
         public string? PrinterName { get; init; }
         public string? PrinterShareName { get; init; }
         public bool PrinterShared { get; init; }
+        public bool PrinterAllowsAuthenticatedUsersPrint { get; init; }
         public string? PrinterDriverName { get; init; }
         public string? PrinterDriverVersion { get; init; }
         public bool PrinterConnectionInstalled { get; init; }
