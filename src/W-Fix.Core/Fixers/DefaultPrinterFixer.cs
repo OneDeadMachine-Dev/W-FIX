@@ -6,13 +6,23 @@ namespace WFix.Core.Fixers;
 /// <summary>
 /// Сброс и переустановка принтера по умолчанию.
 /// </summary>
-public class DefaultPrinterFixer : FixerBase
+public class DefaultPrinterFixer : FixerBase, ISystemStateChangingFixer
 {
     public override string Name => "Сброс принтера по умолчанию";
     public override string Description =>
         "Очищает некорректную запись PrinterDevice в реестре и переустанавливает принтер по умолчанию. " +
         "Решает проблему «принтер по умолчанию не сохраняется» или выбирается неверная бумага.";
     public override string[] TargetErrorCodes => ["default", "device", "HKCU_printer"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer) => new()
+    {
+        RegistryValues =
+        [
+            new(@"HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows", "LegacyDefaultPrinterMode"),
+            new(@"HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows", "UserSelectedDefault"),
+            new(@"HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows", "Device")
+        ]
+    };
 
     public override async Task<FixResult> ApplyAsync(PrinterInfo? printer, string? remoteMachine, IProgress<LogEntry>? progress, CancellationToken ct)
     {

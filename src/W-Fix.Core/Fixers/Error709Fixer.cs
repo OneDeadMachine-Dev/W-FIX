@@ -15,13 +15,28 @@ namespace WFix.Core.Fixers;
 ///   4. Установка принтера по умолчанию через WScript.Network
 ///   5. Перезапуск Spooler
 /// </summary>
-public class Error709Fixer : FixerBase
+public class Error709Fixer : FixerBase, ISystemStateChangingFixer
 {
     public override string Name => "Ошибка 0x00000709 (Принтер по умолчанию)";
     public override string Description =>
         "Исправляет ошибку «Невозможно завершить операцию (0x00000709)» при назначении принтера по умолчанию. " +
         "Сбрасывает политику автоуправления, чинит права реестра и переназначает принтер.";
     public override string[] TargetErrorCodes => ["0x00000709", "709", "default_printer_failed"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer)
+    {
+        const string windowsKey = @"HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows";
+        return new SystemStateBackupPlan
+        {
+            RegistryValues =
+            [
+                new(windowsKey, "LegacyDefaultPrinterMode"),
+                new(windowsKey, "UserSelectedDefault"),
+                new(windowsKey, "Device")
+            ],
+            RegistryAcls = [new RegistryAclBackupTarget(windowsKey)]
+        };
+    }
 
     public override async Task<FixResult> ApplyAsync(
         PrinterInfo? printer, string? remoteMachine,

@@ -9,7 +9,7 @@ namespace WFix.Core.Fixers;
 /// Суть: Windows ввёл строгую аутентификацию RPC при подключении к сетевым принтерам.
 /// Решение: установить RpcAuthnLevelPrivacyEnabled = 0 на сервере печати.
 /// </summary>
-public class Error11bFixer : FixerBase
+public class Error11bFixer : FixerBase, ISystemStateChangingFixer
 {
     private const string RegPath = @"HKLM:\System\CurrentControlSet\Control\Print";
     private const string RegValue = "RpcAuthnLevelPrivacyEnabled";
@@ -19,6 +19,11 @@ public class Error11bFixer : FixerBase
         "Устанавливает RpcAuthnLevelPrivacyEnabled = 0 в реестре сервера печати и перезапускает Spooler. " +
         "Решает ошибку подключения к сетевому принтеру после обновлений Windows (KB5005565+).";
     public override string[] TargetErrorCodes => ["0x0000011b", "11b", "ERROR_INVALID_PRINTER_NAME", "0x0000011B"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer) => new()
+    {
+        RegistryValues = [new RegistryValueBackupTarget(RegPath, RegValue)]
+    };
 
     public override async Task<FixResult> ApplyAsync(PrinterInfo? printer, string? remoteMachine, IProgress<LogEntry>? progress, CancellationToken ct)
     {

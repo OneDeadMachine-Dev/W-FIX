@@ -54,6 +54,9 @@
                     <TextBlock Text="{Binding AdStatusText}" Foreground="#58A6FF" VerticalAlignment="Center" FontSize="12"/>
                     <Button Content="📝 Логи" Command="{Binding OpenLogsFolderCommand}" ToolTip="Открыть папку с текстовыми логами"
                             Style="{StaticResource FixButton}" Padding="10,6" Margin="8,0,0,0"/>
+                    <Button Content="↩ Откат" Command="{Binding RestoreLastBackupCommand}"
+                            ToolTip="Восстановить состояние до последнего исправления"
+                            Style="{StaticResource FixButton}" Padding="10,6" Margin="8,0,0,0"/>
                     <Button Content="🔄 Обновить" Command="{Binding RefreshPrintersCommand}"
                             Style="{StaticResource FixButton}" Padding="10,6" Margin="8,0,0,0"/>
                 </StackPanel>

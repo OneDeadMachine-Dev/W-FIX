@@ -47,6 +47,7 @@
 - 🌐 **Удалённые машины** — применяй фиксеры через WinRM/PowerShell Remoting
 - 🔍 **Обнаружение принтеров** — CIM / WMI / Get-Printer (тройной fallback)
 - 📋 **Полный лог** — каждый шаг фиксера отображается в реальном времени
+- ↩️ **Точечный откат** — снимок изменяемых ключей реестра и кнопка восстановления после фикса
 - 🗂 **Active Directory** — обзор принтеров в домене
 
 ---
@@ -99,6 +100,7 @@ W-Fix/
 │   │   ├── Services/
 │   │   │   ├── WmiService.cs     # Обнаружение принтеров (CIM/WMI/PS)
 │   │   │   ├── PowerShellEngine.cs  # Встроенный PS SDK + внешний fallback
+│   │   │   ├── SystemStateBackupService.cs # Снимок реестра + restore.ps1
 │   │   │   └── FixerRegistry.cs  # Регистрация и поиск фиксеров
 │   │   └── Models/               # PrinterInfo, FixResult, LogEntry ...
 │   └── W-Fix.App/                # WPF UI (MVVM + CommunityToolkit)

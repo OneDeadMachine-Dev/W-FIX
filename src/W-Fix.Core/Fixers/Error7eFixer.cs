@@ -18,13 +18,34 @@ namespace WFix.Core.Fixers;
 ///   4. Очистка кеша драйверов
 ///   5. Перезапуск Spooler
 /// </summary>
-public class Error7eFixer : FixerBase
+public class Error7eFixer : FixerBase, ISystemStateChangingFixer
 {
     public override string Name => "Ошибка 0x0000007e (Модуль не найден)";
     public override string Description =>
         "Исправляет ошибку «Указанный модуль не найден (0x0000007e)» при подключении к принтеру. " +
         "Копирует mscms.dll, удаляет BIDI-ключ реестра, проверяет файлы драйверов.";
     public override string[] TargetErrorCodes => ["0x0000007e", "7e", "module_not_found"];
+
+    public SystemStateBackupPlan CreateBackupPlan(PrinterInfo? printer)
+    {
+        var plan = new SystemStateBackupPlan
+        {
+            RegistryValues =
+            [
+                new(@"HKLM:\SYSTEM\CurrentControlSet\Control\Print", "RpcAuthnLevelPrivacyEnabled")
+            ]
+        };
+
+        if (printer == null || printer.Name.Contains('\\'))
+            return plan;
+
+        var providerPath = $@"HKLM:\SYSTEM\CurrentControlSet\Control\Print\Printers\{printer.Name}\CopyFiles\BIDI";
+        var nativePath = $@"HKLM\SYSTEM\CurrentControlSet\Control\Print\Printers\{printer.Name}\CopyFiles\BIDI";
+        return plan with
+        {
+            RegistryKeys = [new RegistryKeyBackupTarget(providerPath, nativePath)]
+        };
+    }
 
     public override async Task<FixResult> ApplyAsync(
         PrinterInfo? printer, string? remoteMachine,
