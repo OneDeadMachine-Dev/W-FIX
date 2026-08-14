@@ -81,8 +81,13 @@ public class DriverFixer : FixerBase, IInteractiveFixer
             # Шаг 1: Установить драйвер через pnputil
             Write-Output ""[INFO] Добавляем INF в хранилище драйверов через pnputil...""
             $pnpResult = pnputil.exe /add-driver ""$infPath"" /install 2>&1
+            $pnpExitCode = $LASTEXITCODE
             foreach ($line in $pnpResult) {
                 Write-Output ""[INFO] pnputil: $line""
+            }
+            if ($pnpExitCode -ne 0) {
+                Write-Output ""[ERROR] pnputil завершился с кодом $pnpExitCode""
+                exit $pnpExitCode
             }
 
             # Шаг 2: Если есть конкретный принтер — попытаемся обновить его драйвер
@@ -249,6 +254,7 @@ public class DriverFixer : FixerBase, IInteractiveFixer
                     }
                 }
                 Write-Output ""[INFO] Установите драйвер вручную через INF-файл (режим INF)""
+                exit 1
             }
         ";
 

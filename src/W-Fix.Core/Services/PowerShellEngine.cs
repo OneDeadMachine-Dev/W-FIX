@@ -1,17 +1,19 @@
-using System.Collections.ObjectModel;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Text;
+using WFix.Core.Models;
 
 namespace WFix.Core.Services;
 
 /// <summary>
 /// Потокобезопасный движок PowerShell.
 /// Каждый вызов запускается в собственном Runspace с политикой Bypass (на уровне процесса).
-/// Поддерживает live-стриминг вывода через IAsyncEnumerable.
+/// Корректно останавливает pipeline/процесс при отмене и ограничивает время выполнения.
 /// </summary>
 public class PowerShellEngine : IDisposable
 {
+    private static readonly TimeSpan DefaultExecutionTimeout = TimeSpan.FromMinutes(10);
+
     private readonly string? _remoteComputer;
     private readonly string? _username;
     private readonly string? _password;
@@ -27,78 +29,116 @@ public class PowerShellEngine : IDisposable
     /// <summary>
     /// Выполняет скрипт и возвращает весь вывод строками.
     /// </summary>
-    public async Task<(bool Success, IReadOnlyList<string> Output, string? Error)> RunAsync(
+    public async Task<PowerShellExecutionResult> RunAsync(
         string script,
         Dictionary<string, object?>? parameters = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        TimeSpan? timeout = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(script);
+
+        var executionTimeout = ValidateTimeout(timeout);
+        using var timeoutCts = new CancellationTokenSource(executionTimeout);
+        using var executionCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
+        try
+        {
+            return await Task.Run(
+                () => RunInProcess(script, parameters, executionCts.Token),
+                CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ct);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            var message = $"PowerShell превысил таймаут {executionTimeout}.";
+            return PowerShellExecutionResult.Create(
+                [$"[ERROR] {message}"], message, timedOut: true);
+        }
+    }
+
+    private PowerShellExecutionResult RunInProcess(
+        string script,
+        Dictionary<string, object?>? parameters,
+        CancellationToken ct)
     {
         var lines = new List<string>();
-        string? errorMsg = null;
-        bool success = true;
 
-        await Task.Run(() =>
+        try
         {
-            try
+            ct.ThrowIfCancellationRequested();
+            using var runspace = BuildRunspace();
+            runspace.Open();
+            using var ps = PowerShell.Create();
+            ps.Runspace = runspace;
+
+            if (!string.IsNullOrEmpty(_remoteComputer))
             {
-                using var runspace = BuildRunspace();
-                runspace.Open();
-                using var ps = PowerShell.Create();
-                ps.Runspace = runspace;
-
-                if (!string.IsNullOrEmpty(_remoteComputer))
+                var sb = new StringBuilder();
+                sb.Append("Invoke-Command -ComputerName '");
+                sb.Append(_remoteComputer.Replace("'", "''"));
+                sb.Append("' -ScriptBlock { ");
+                sb.Append(script);
+                sb.Append(" }");
+                if (!string.IsNullOrEmpty(_username))
                 {
-                    // Оборачиваем в Invoke-Command для удалённого выполнения
-                    var sb = new StringBuilder();
-                    sb.Append("Invoke-Command -ComputerName '");
-                    sb.Append(_remoteComputer.Replace("'", "''"));
-                    sb.Append("' -ScriptBlock { ");
-                    sb.Append(script);
-                    sb.Append(" }");
-                    if (!string.IsNullOrEmpty(_username))
-                    {
-                        sb.Append(" -Credential (New-Object System.Management.Automation.PSCredential('");
-                        sb.Append(_username.Replace("'", "''"));
-                        sb.Append("', (ConvertTo-SecureString '");
-                        sb.Append((_password ?? "").Replace("'", "''"));
-                        sb.Append("' -AsPlainText -Force)))");
-                    }
-                    ps.AddScript(sb.ToString());
+                    sb.Append(" -Credential (New-Object System.Management.Automation.PSCredential('");
+                    sb.Append(_username.Replace("'", "''"));
+                    sb.Append("', (ConvertTo-SecureString '");
+                    sb.Append((_password ?? "").Replace("'", "''"));
+                    sb.Append("' -AsPlainText -Force)))");
                 }
-                else
-                {
-                    ps.AddScript(script);
-                }
-
-                if (parameters != null)
-                {
-                    foreach (var kv in parameters)
-                        ps.AddParameter(kv.Key, kv.Value);
-                }
-
-                var results = ps.Invoke();
-                foreach (var r in results)
-                    if (r != null) lines.Add(r.ToString() ?? "");
-
-                foreach (var e in ps.Streams.Error)
-                {
-                    lines.Add($"[ERROR] {e}");
-                    success = false;
-                    errorMsg ??= e.ToString();
-                }
-                foreach (var w in ps.Streams.Warning)
-                    lines.Add($"[WARN]  {w.Message}");
-                foreach (var v in ps.Streams.Verbose)
-                    lines.Add($"[VERBOSE] {v.Message}");
+                ps.AddScript(sb.ToString());
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            else
             {
-                success = false;
-                errorMsg = ex.Message;
-                lines.Add($"[EXCEPTION] {ex.Message}");
+                ps.AddScript(script);
             }
-        }, ct);
 
-        return (success, lines, errorMsg);
+            if (parameters != null)
+            {
+                foreach (var kv in parameters)
+                    ps.AddParameter(kv.Key, kv.Value);
+            }
+
+            using var cancellationRegistration = ct.Register(() =>
+            {
+                try { ps.Stop(); }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
+            });
+
+            var results = ps.Invoke();
+            ct.ThrowIfCancellationRequested();
+
+            foreach (var result in results)
+                if (result != null) lines.Add(result.ToString() ?? "");
+
+            foreach (var error in ps.Streams.Error)
+                lines.Add($"[ERROR] {error}");
+            foreach (var warning in ps.Streams.Warning)
+                lines.Add($"[WARN] {warning.Message}");
+            foreach (var verbose in ps.Streams.Verbose)
+                lines.Add($"[VERBOSE] {verbose.Message}");
+
+            return PowerShellExecutionResult.Create(lines);
+        }
+        catch (PipelineStoppedException) when (ct.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"[EXCEPTION] {ex.Message}");
+            return PowerShellExecutionResult.Create(lines, ex.Message);
+        }
     }
 
     private Runspace BuildRunspace()
@@ -130,78 +170,129 @@ public class PowerShellEngine : IDisposable
     /// Используется для cmdlets, требующих модулей Windows (Get-Printer, Get-PrinterDriver, DISM и т.д.),
     /// которые недоступны во встроенном PowerShell SDK.
     /// </summary>
-    public static async Task<(bool Success, IReadOnlyList<string> Output, string? Error)> RunExternalAsync(
-        string script, CancellationToken ct = default)
+    public static async Task<PowerShellExecutionResult> RunExternalAsync(
+        string script,
+        CancellationToken ct = default,
+        TimeSpan? timeout = null)
     {
-        var lines = new List<string>();
-        string? errorMsg = null;
-        bool success = true;
+        ArgumentException.ThrowIfNullOrWhiteSpace(script);
+        ct.ThrowIfCancellationRequested();
 
-        await Task.Run(() =>
+        var executionTimeout = ValidateTimeout(timeout);
+        var lines = new List<string>();
+
+        try
         {
+            var psExe = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe");
+
+            if (!File.Exists(psExe))
+                psExe = "powershell.exe";
+
+            var utf8Script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n" + script;
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(utf8Script));
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = psExe,
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process == null)
+                return PowerShellExecutionResult.Create([], "Не удалось запустить powershell.exe");
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var timeoutCts = new CancellationTokenSource(executionTimeout);
+            using var executionCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
             try
             {
-                // Ищем powershell.exe (Windows PowerShell 5.1 — есть на всех Windows 10/11)
-                var psExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
-                    "WindowsPowerShell", "v1.0", "powershell.exe");
-
-                if (!File.Exists(psExe))
-                {
-                    // Fallback на PATH
-                    psExe = "powershell.exe";
-                }
-
-                // Заставляем PS-скрипт отдавать вывод в UTF-8, чтобы мы могли правильно его прочитать с кириллицей
-                var utf8Script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n" + script;
-
-                // Кодируем скрипт в Base64 для безопасной передачи
-                var bytes = System.Text.Encoding.Unicode.GetBytes(utf8Script);
-                var encoded = Convert.ToBase64String(bytes);
-
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = psExe,
-                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8,
-                    StandardErrorEncoding = System.Text.Encoding.UTF8,
-                };
-
-                using var process = System.Diagnostics.Process.Start(psi);
-                if (process == null)
-                {
-                    success = false;
-                    errorMsg = "Не удалось запустить powershell.exe";
-                    return;
-                }
-
-                var stdout = process.StandardOutput.ReadToEnd();
-                var stderr = process.StandardError.ReadToEnd();
-                process.WaitForExit(60_000); // 60 сек таймаут
-
-                foreach (var line in stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-                    lines.Add(line);
-
-                if (process.ExitCode != 0)
-                {
-                    success = false;
-                    errorMsg = stderr.Length > 0 ? stderr.Trim() : $"Exit code: {process.ExitCode}";
-                    if (!string.IsNullOrEmpty(stderr))
-                        lines.Add($"[ERROR] {stderr.Trim()}");
-                }
+                await process.WaitForExitAsync(executionCts.Token);
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                success = false;
-                errorMsg = ex.Message;
-                lines.Add($"[EXCEPTION] {ex.Message}");
-            }
-        }, ct);
+                KillProcessTree(process);
+                await process.WaitForExitAsync(CancellationToken.None);
 
-        return (success, lines, errorMsg);
+                if (ct.IsCancellationRequested)
+                    throw new OperationCanceledException(ct);
+
+                var timeoutMessage = $"PowerShell превысил таймаут {executionTimeout}.";
+                return PowerShellExecutionResult.Create(
+                    [$"[ERROR] {timeoutMessage}"], timeoutMessage,
+                    timedOut: timeoutCts.IsCancellationRequested);
+            }
+
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            lines.AddRange(stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+            var actionableStderr = IsActionableStandardError(stderr);
+            var stderrLines = actionableStderr
+                ? stderr.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                : [];
+            lines.AddRange(stderrLines.Select(line => $"[ERROR] {line}"));
+
+            var error = stderrLines.FirstOrDefault();
+            if (process.ExitCode != 0 && error is null)
+                error = $"Exit code: {process.ExitCode}";
+
+            return PowerShellExecutionResult.Create(lines, error, process.ExitCode);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"[EXCEPTION] {ex.Message}");
+            return PowerShellExecutionResult.Create(lines, ex.Message);
+        }
+    }
+
+    private static TimeSpan ValidateTimeout(TimeSpan? timeout)
+    {
+        var value = timeout ?? DefaultExecutionTimeout;
+        if (value <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout), "Таймаут должен быть положительным.");
+        return value;
+    }
+
+    private static void KillProcessTree(System.Diagnostics.Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
+    private static bool IsActionableStandardError(string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr))
+            return false;
+
+        // Windows PowerShell 5.1 пишет progress-записи запуска модулей в stderr как CLIXML.
+        // Это служебный поток, а не ошибка команды. Реальные ErrorRecord помечены S="Error".
+        if (stderr.TrimStart().StartsWith("#< CLIXML", StringComparison.OrdinalIgnoreCase))
+        {
+            return stderr.Contains("S=\"Error\"", StringComparison.OrdinalIgnoreCase) ||
+                   stderr.Contains("S='Error'", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
     }
 
     public void Dispose()

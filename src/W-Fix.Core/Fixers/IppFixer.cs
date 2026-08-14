@@ -36,6 +36,7 @@ public class IppFixer : FixerBase
         IProgress<LogEntry>? progress, CancellationToken ct)
     {
         var steps = new List<LogEntry>();
+        var executionResults = new List<PowerShellExecutionResult>();
         void Report(LogEntry e) { steps.Add(e); progress?.Report(e); }
 
         Report(Info("Диагностика и исправление сбоя IPP..."));
@@ -79,8 +80,14 @@ public class IppFixer : FixerBase
             """;
 
         using var engine = remoteMachine != null ? new PowerShellEngine(remoteMachine) : null;
-        async Task<(bool, IReadOnlyList<string>, string?)> RunPS(string script) =>
-            engine != null ? await engine.RunAsync(script, ct: ct) : await PowerShellEngine.RunExternalAsync(script, ct);
+        async Task<PowerShellExecutionResult> RunPS(string script)
+        {
+            var result = engine != null
+                ? await engine.RunAsync(script, ct: ct)
+                : await PowerShellEngine.RunExternalAsync(script, ct);
+            executionResults.Add(result);
+            return result;
+        }
 
         var (_, out1, _) = await RunPS(step1);
         ReportOutput(out1, Report);
@@ -262,7 +269,8 @@ public class IppFixer : FixerBase
         Report(Info("IPP требует включённый компонент Windows и MS IPP Class Driver."));
         Report(Info("При сохранении проблем — перезагрузите ПК."));
 
-        var allOk = steps.All(s => s.Level != Models.LogLevel.Error);
+        var allOk = executionResults.All(result => result.Success) &&
+                    steps.All(s => s.Level != Models.LogLevel.Error);
         return allOk
             ? FixResult.Ok("Фикс IPP выполнен", steps)
             : FixResult.Warn("Фикс IPP частично выполнен — проверьте логи", steps);

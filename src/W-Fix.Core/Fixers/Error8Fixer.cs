@@ -52,7 +52,8 @@ public class Error8Fixer : FixerBase
             """;
 
         using var engine = new PowerShellEngine(remoteMachine);
-        var (_, diagOutput, _) = await engine.RunAsync(diagScript, ct: ct);
+        var diagnosticResult = await engine.RunAsync(diagScript, ct: ct);
+        var diagOutput = diagnosticResult.Output;
         foreach (var line in diagOutput)
         {
             var level = line.StartsWith("[OK]") ? Models.LogLevel.Success
@@ -68,34 +69,8 @@ public class Error8Fixer : FixerBase
         var spoolerResult = await spoolerFixer.ApplyAsync(printer, remoteMachine, progress, ct);
         steps.AddRange(spoolerResult.Steps);
 
-        // Дополнительно: очистка временных файлов Windows
-        var cleanupScript = """
-            Write-Output "[INFO] Очистка временных файлов Windows (помогает при нехватке места)..."
-            $tempPaths = @($env:TEMP, $env:TMP, "$env:SystemRoot\Temp")
-            $totalDeleted = 0
-            foreach ($p in $tempPaths) {
-                if (Test-Path $p) {
-                    $items = Get-ChildItem -Path $p -Recurse -ErrorAction SilentlyContinue
-                    $items | Where-Object { -not $_.PSIsContainer } | 
-                        Remove-Item -Force -ErrorAction SilentlyContinue
-                    $totalDeleted++
-                }
-            }
-            Write-Output "[OK] Очистка временных папок завершена"
-            """;
-
-        var (cleanSuccess, cleanOutput, cleanError) = await engine.RunAsync(cleanupScript, ct: ct);
-        foreach (var line in cleanOutput)
-        {
-            var level = line.StartsWith("[OK]") ? Models.LogLevel.Success
-                      : line.StartsWith("[WARN]") ? Models.LogLevel.Warning
-                      : line.StartsWith("[ERROR]") ? Models.LogLevel.Error
-                      : Models.LogLevel.Info;
-            Report(new LogEntry(level, line));
-        }
-
-        return spoolerResult.Status == FixStatus.Success
-            ? FixResult.Ok("Фикс 0x00000008 выполнен: очередь очищена, временные файлы удалены", steps)
+        return spoolerResult.Status == FixStatus.Success && diagnosticResult.Success
+            ? FixResult.Ok("Фикс 0x00000008 выполнен: очередь очищена, Spooler перезапущен", steps)
             : FixResult.Warn("Фикс 0x00000008 частично выполнен — проверьте логи", steps);
     }
 }

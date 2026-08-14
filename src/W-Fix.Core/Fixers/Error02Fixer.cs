@@ -86,7 +86,8 @@ public class Error02Fixer : FixerBase
             """;
 
         using var engine = new PowerShellEngine(remoteMachine);
-        var (_, out1, _) = await engine.RunAsync(step1, ct: ct);
+        var result1 = await engine.RunAsync(step1, ct: ct);
+        var out1 = result1.Output;
         ReportOutput(out1, Report);
 
         // ── Шаг 2: Очистка Print Environments в реестре ─────────────────────────
@@ -114,7 +115,8 @@ public class Error02Fixer : FixerBase
             }
             """;
 
-        var (_, out2, _) = await engine.RunAsync(step2, ct: ct);
+        var result2 = await engine.RunAsync(step2, ct: ct);
+        var out2 = result2.Output;
         ReportOutput(out2, Report);
 
         // ── Шаг 3: PendingFileRenameOperations ──────────────────────────────────
@@ -151,7 +153,8 @@ public class Error02Fixer : FixerBase
             }
             """;
 
-        var (_, out3, _) = await engine.RunAsync(step3, ct: ct);
+        var result3 = await engine.RunAsync(step3, ct: ct);
+        var out3 = result3.Output;
         ReportOutput(out3, Report);
 
         // ── Шаг 4: Point and Print + RPC ────────────────────────────────────────
@@ -176,7 +179,8 @@ public class Error02Fixer : FixerBase
             }
             """;
 
-        var (_, out4, _) = await engine.RunAsync(step4, ct: ct);
+        var result4 = await engine.RunAsync(step4, ct: ct);
+        var out4 = result4.Output;
         ReportOutput(out4, Report);
 
         // ── Шаг 5: Перезапуск Spooler ───────────────────────────────────────────
@@ -187,7 +191,10 @@ public class Error02Fixer : FixerBase
 
         Report(Info("Рекомендация: перезагрузите компьютер, затем повторите подключение к принтеру."));
 
-        return spoolerResult.Status == FixStatus.Success
+        var allStepsSucceeded = new[] { result1, result2, result3, result4 }
+            .All(result => result.Success);
+
+        return spoolerResult.Status == FixStatus.Success && allStepsSucceeded
             ? FixResult.Ok("Фикс 0x00000002 выполнен", steps)
             : FixResult.Warn("Фикс 0x00000002 частично выполнен", steps);
     }

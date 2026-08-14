@@ -110,6 +110,9 @@ W-Fix/
 
 **Стек:** WPF · .NET 8 · ModernWpfUI · CommunityToolkit.Mvvm · PowerShell SDK · Serilog
 
+Подробности внутренних границ, выполнения PowerShell и правил для фиксеров:
+[docs/architecture.md](docs/architecture.md).
+
 ---
 
 ## 📋 Системные требования
